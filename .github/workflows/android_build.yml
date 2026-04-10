@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java (JDK 21)
@@ -29,7 +29,8 @@ jobs:
         run: npm install
 
       - name: Build Next.js
-        run: npm run build
+        run: |
+          npm run build || (echo "BUILD FAILED. Printing logs..." && npm run build -- --verbose)
 
       - name: Capacitor Sync
         run: npx cap sync android
