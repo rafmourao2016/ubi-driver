@@ -3,6 +3,8 @@
 import React, { useMemo, useEffect } from 'react';
 import { calculateProfit } from '../lib/calculations';
 import { useSync } from '../hooks/useSync';
+import PiPMode from './PiPMode';
+
 
 export default function Calculator() {
   const { data: input, setData: setInput, syncData, loading, lastSynced } = useSync({
@@ -190,6 +192,12 @@ export default function Calculator() {
       <div className="mt-12 text-center text-xs text-text-muted">
         <p>Desenvolvido para motoristas de elite.</p>
       </div>
+
+      <PiPMode
+        netProfit={results.netProfit}
+        margin={results.profitMargin}
+        profitPerKm={results.profitPerKm}
+      />
     </div>
   );
 }
