@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ubi</string>
+    <string name="title_activity_main">Ubi</string>
+    <string name="package_name">com.ubi.app</string>
+    <string name="custom_url_scheme">com.ubi.app</string>
+    <string name="accessibility_service_description">Ubi - Automação de Lucro para Motoristas</string>
+</resources>
