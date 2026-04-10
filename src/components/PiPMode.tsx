@@ -8,12 +8,10 @@ interface PiPModeProps {
   profitPerKm: number;
 }
 
-// Tipo para o plugin nativo
 interface OverlayPluginInterface {
   showOverlay: (data: { netProfit: number; margin: number; profitPerKm: number }) => Promise<void>;
   updateOverlay: (data: { netProfit: number; margin: number; profitPerKm: number }) => Promise<void>;
   hideOverlay: () => Promise<void>;
-  isOverlayVisible: () => Promise<{ visible: boolean }>;
 }
 
 function getOverlayPlugin(): OverlayPluginInterface | null {
@@ -34,7 +32,6 @@ export default function PiPMode({ netProfit, margin, profitPerKm }: PiPModeProps
     setIsBrowserPiPSupported(!native && 'documentPictureInPicture' in window);
   }, []);
 
-  // Sincroniza valores com a overlay nativa quando mudam
   useEffect(() => {
     if (!isOverlayActive) return;
     const plugin = getOverlayPlugin();
@@ -70,18 +67,18 @@ export default function PiPMode({ netProfit, margin, profitPerKm }: PiPModeProps
 
       const style = document.createElement('style');
       style.textContent = `
-        body { margin: 0; background: #0D0D0D; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: system-ui, sans-serif; }
+        body { margin: 0; background: #0D0D0D; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: 'Outfit', sans-serif; }
         .pip-root { text-align: center; color: white; }
-        .pip-label { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: #A78BFA; }
-        .pip-profit { font-size: 32px; font-weight: 900; margin: 4px 0; }
-        .pip-stats { font-size: 11px; color: #888; }
+        .pip-label { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: #c084fc; font-weight: 800; }
+        .pip-profit { font-size: 36px; font-weight: 900; margin: 4px 0; letter-spacing: -1px; }
+        .pip-stats { font-size: 11px; color: #94a3b8; font-weight: 600; }
       `;
       pipWindow.document.head.appendChild(style);
 
       const container = pipWindow.document.createElement('div');
       container.className = 'pip-root';
       container.innerHTML = `
-        <div class="pip-label">UBI DRIVER</div>
+        <div class="pip-label">UBI SMART PRO</div>
         <div class="pip-profit" id="pip-profit">R$ 0,00</div>
         <div class="pip-stats" id="pip-stats">Margem: 0%  •  R$0,00/km</div>
       `;
@@ -121,29 +118,32 @@ export default function PiPMode({ netProfit, margin, profitPerKm }: PiPModeProps
   if (!isNative && !isBrowserPiPSupported) return null;
 
   return (
-    <button
-      id="pip-toggle-btn"
-      onClick={handleToggle}
-      title={isOverlayActive ? 'Fechar Overlay' : 'Ativar Overlay Flutuante'}
-      className={`fixed bottom-6 right-6 p-4 border border-border rounded-full shadow-xl hover:scale-110 transition-all z-50 ${
-        isOverlayActive
-          ? 'bg-primary text-white shadow-primary/40'
-          : 'bg-accent'
-      }`}
-    >
-      {isOverlayActive ? (
-        // Ícone "X" quando ativo
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      ) : (
-        // Ícone PiP quando inativo
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-          <rect x="12" y="12" width="8" height="6" rx="1" fill="currentColor" stroke="none"/>
-        </svg>
-      )}
-    </button>
+    <div className="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-50">
+      <button
+        onClick={handleToggle}
+        className={`flex items-center gap-3 px-6 py-4 rounded-full shadow-2xl transition-all duration-500 scale-100 active:scale-95 ${
+          isOverlayActive
+            ? 'bg-rose-500 text-white shadow-rose-500/40'
+            : 'bg-white text-black shadow-white/20'
+        }`}
+      >
+        <span className="text-xs font-black uppercase tracking-tighter">
+          {isOverlayActive ? 'Fechar Modo Flutuante' : 'Ativar Modo Flutuante'}
+        </span>
+        <div className={`p-1 rounded-lg ${isOverlayActive ? 'bg-white/20' : 'bg-black/5'}`}>
+          {isOverlayActive ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+              <rect x="11" y="11" width="9" height="7" rx="1" fill="currentColor" stroke="none"/>
+            </svg>
+          )}
+        </div>
+      </button>
+    </div>
   );
 }
