@@ -10,11 +10,18 @@ import java.util.regex.Pattern;
 public class GigUReaderService extends AccessibilityService {
     private static final String TAG = "GigUReader";
 
+    // Regexes mais robustas para capturar ofertas dinâmicas
+    private static final Pattern PRICE_PATTERN = Pattern.compile("R\\$\\s?(\\d+(?:[.,]\\d+)?)");
+    private static final Pattern DISTANCE_PATTERN = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s?(km|m)", Pattern.CASE_INSENSITIVE);
+
+    private double currentPrice = 0;
+    private double currentKm = 0;
+    private long lastCaptureTime = 0;
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) return;
 
-        // Monitor only Uber and 99
         String packageName = event.getPackageName() != null ? event.getPackageName().toString() : "";
         if (!packageName.contains("ubercab") && !packageName.contains("taxis99") && !packageName.contains("noventaenove")) {
             return;
@@ -23,59 +30,74 @@ public class GigUReaderService extends AccessibilityService {
         AccessibilityNodeInfo rootNode = getRootInActiveWindow();
         if (rootNode == null) return;
 
+        // Resetar se passar muito tempo entre eventos (nova oferta provável)
+        if (System.currentTimeMillis() - lastCaptureTime > 5000) {
+            currentPrice = 0;
+            currentKm = 0;
+        }
+
         processNode(rootNode);
         rootNode.recycle();
     }
 
-    private boolean processNode(AccessibilityNodeInfo node) {
-        if (node == null) return false;
+    private void processNode(AccessibilityNodeInfo node) {
+        if (node == null) return;
 
-        boolean foundBoth = false;
         if (node.getText() != null) {
             String text = node.getText().toString();
-            foundBoth = checkAndEmit(text);
+            extractData(text);
         }
-
-        if (foundBoth) return true;
 
         for (int i = 0; i < node.getChildCount(); i++) {
-            if (processNode(node.getChild(i))) return true;
+            processNode(node.getChild(i));
         }
-        return false;
+
+        // Se capturamos ambos, emitimos e limpamos
+        if (currentPrice > 0 && currentKm > 0) {
+            emitOffer();
+        }
     }
 
-    private double currentPrice = 0;
-    private double currentKm = 0;
-
-    private boolean checkAndEmit(String text) {
-        // Regex for Price: R$ 12,34
-        Pattern pricePattern = Pattern.compile("R\\$\\s?(\\d+[.,]\\d+)");
-        // Regex for Distance: 5,2 km
-        Pattern kmPattern = Pattern.compile("(\\d+[.,]\\d+)\\s?km");
-
-        Matcher priceMatcher = pricePattern.matcher(text);
-        Matcher kmMatcher = kmPattern.matcher(text);
-
+    private void extractData(String text) {
+        // Tenta capturar Preço
+        Matcher priceMatcher = PRICE_PATTERN.matcher(text);
         if (priceMatcher.find()) {
-            currentPrice = parseDouble(priceMatcher.group(1));
-        }
-
-        if (kmMatcher.find()) {
-            currentKm = parseDouble(kmMatcher.group(1));
-        }
-
-        if (currentPrice > 0 && currentKm > 0) {
-            Log.d(TAG, "Oferta detectada completa: R$ " + currentPrice + " | " + currentKm + " km");
-            GigUPlugin plugin = GigUPlugin.getInstance();
-            if (plugin != null) {
-                plugin.emitOfferReceived(text, currentPrice, currentKm);
+            double p = parseDouble(priceMatcher.group(1));
+            if (p > 0) {
+                currentPrice = p;
+                lastCaptureTime = System.currentTimeMillis();
+                Log.d(TAG, "Preço capturado: R$ " + currentPrice);
             }
-            // Reset for next event
-            currentPrice = 0;
-            currentKm = 0;
-            return true;
         }
-        return false;
+
+        // Tenta capturar Distância (KM ou M)
+        Matcher distMatcher = DISTANCE_PATTERN.matcher(text);
+        if (distMatcher.find()) {
+            double d = parseDouble(distMatcher.group(1));
+            String unit = distMatcher.group(2).toLowerCase();
+
+            if (d > 0) {
+                // Se for metros, converte para KM (ex: 500m -> 0.5km)
+                if (unit.equals("m")) {
+                    currentKm = d / 1000.0;
+                } else {
+                    currentKm = d;
+                }
+                lastCaptureTime = System.currentTimeMillis();
+                Log.d(TAG, "Distância capturada: " + currentKm + " km (" + unit + ")");
+            }
+        }
+    }
+
+    private void emitOffer() {
+        Log.d(TAG, "OFERTA COMPLETA: R$ " + currentPrice + " em " + currentKm + " km");
+        GigUPlugin plugin = GigUPlugin.getInstance();
+        if (plugin != null) {
+            plugin.emitOfferReceived("Offer Detected", currentPrice, currentKm);
+        }
+        // Limpar para evitar duplicidade no mesmo evento
+        currentPrice = 0;
+        currentKm = 0;
     }
 
     private double parseDouble(String value) {

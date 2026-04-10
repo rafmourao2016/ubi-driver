@@ -121,9 +121,9 @@ public class OverlayPlugin extends Plugin {
 
         // ── Badge (ELITE / ACEITÁVEL / BAIXO LUCRO) ──
         badgeText = new TextView(getContext());
-        badgeText.setTextSize(9);
+        badgeText.setTextSize(11);
         badgeText.setAllCaps(true);
-        badgeText.setPadding(dp(8), dp(3), dp(8), dp(3));
+        badgeText.setPadding(dp(10), dp(4), dp(10), dp(4));
         badgeText.setTextColor(Color.WHITE);
 
         LinearLayout badgeRow = new LinearLayout(getContext());
@@ -134,7 +134,7 @@ public class OverlayPlugin extends Plugin {
         TextView closeBtn = new TextView(getContext());
         closeBtn.setText("  ✕");
         closeBtn.setTextColor(Color.parseColor("#888888"));
-        closeBtn.setTextSize(14);
+        closeBtn.setTextSize(16);
         closeBtn.setOnClickListener(v -> removeOverlay());
 
         badgeRow.addView(badgeText);
@@ -142,20 +142,21 @@ public class OverlayPlugin extends Plugin {
 
         // ── Titulo ──
         TextView title = new TextView(getContext());
-        title.setText("UBI DRIVER");
+        title.setText("UBI SMART DRIVER");
         title.setTextColor(Color.parseColor("#A78BFA"));
-        title.setTextSize(9);
+        title.setTextSize(10);
         title.setAllCaps(true);
 
         // ── Lucro principal ──
         profitText = new TextView(getContext());
         profitText.setTextColor(Color.WHITE);
-        profitText.setTextSize(28);
+        profitText.setTextSize(32);
+        profitText.setPadding(0, dp(2), 0, dp(2));
 
         // ── Stats secundários ──
         statsText = new TextView(getContext());
         statsText.setTextColor(Color.parseColor("#AAAAAA"));
-        statsText.setTextSize(11);
+        statsText.setTextSize(13);
 
         inner.addView(badgeRow);
         inner.addView(title);
@@ -172,12 +173,13 @@ public class OverlayPlugin extends Plugin {
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
         params = new WindowManager.LayoutParams(
-                dp(200),
+                dp(260),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
         );
+
         params.gravity = Gravity.TOP | Gravity.END;
         params.x = dp(8);
         params.y = dp(80);

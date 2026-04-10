@@ -16,10 +16,10 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class GigUPlugin extends Plugin {
     private static GigUPlugin instance;
 
-    // Custos padrão para cálculo nativo
-    private static final double FUEL_PRICE = 5.80;
-    private static final double FUEL_CONSUMPTION = 10.0; // km/l
-    private static final double PLATFORM_FEE = 0.25;    // 25%
+    // Custos mutáveis sincronizados pelo JavaScript
+    private double fuelPrice = 5.80;
+    private double fuelConsumption = 10.0;
+    private double platformFeePercent = 0.25; // 25%
 
     @Override
     public void load() {
@@ -31,30 +31,41 @@ public class GigUPlugin extends Plugin {
         return instance;
     }
 
+    @PluginMethod
+    public void updateSettings(PluginCall call) {
+        this.fuelPrice = call.getDouble("fuelPrice", 5.80);
+        this.fuelConsumption = call.getDouble("fuelConsumption", 10.0);
+        this.platformFeePercent = call.getDouble("platformFee", 25.0) / 100.0;
+        
+        Log.d("GigUPlugin", "Configurações sincronizadas: Fuel=" + fuelPrice + ", Consumo=" + fuelConsumption);
+        call.resolve();
+    }
+
     public void emitOfferReceived(String rawText, double price, double km) {
-        // Emite para a camada JS
+        // Emite para a camada JS (Pode ser usado para logs ou persistência)
         JSObject ret = new JSObject();
         ret.put("rawText", rawText);
         ret.put("price", price);
         ret.put("km", km);
         notifyListeners("onUberOffer", ret);
 
-        // Calcula lucro no lado nativo
-        double fuelCost     = (km / FUEL_CONSUMPTION) * FUEL_PRICE;
-        double platformFee  = price * PLATFORM_FEE;
+        // Calcula lucro no lado nativo usando os custos sincronizados
+        double fuelCost     = (km / fuelConsumption) * fuelPrice;
+        double platformFee  = price * platformFeePercent;
         double netProfit    = price - fuelCost - platformFee;
         double margin       = price > 0 ? (netProfit / price) * 100.0 : 0;
         double profitPerKm  = km > 0 ? netProfit / km : 0;
 
-        // Atualiza a overlay nativa
+        // Atualiza a overlay nativa imediatamente
         OverlayPlugin overlay = OverlayPlugin.getInstance();
         if (overlay != null) {
             overlay.updateFromService(netProfit, margin, profitPerKm);
         }
 
-        // Dispara feedback (vibração + som) conforme margem
+        // Dispara feedback (vibração + som)
         triggerFeedback(margin);
     }
+
 
     private void triggerFeedback(double margin) {
         Context ctx = getContext();
