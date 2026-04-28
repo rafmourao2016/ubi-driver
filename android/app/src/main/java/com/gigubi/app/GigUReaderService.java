@@ -10,48 +10,92 @@ import java.util.regex.Pattern;
 public class GigUReaderService extends AccessibilityService {
     private static final String TAG = "GigUReader";
 
-    // Regexes ultra-robustas para capturar ofertas dinâmicas
-    private static final Pattern PRICE_PATTERN = Pattern.compile("R\\$?\\s?(\\d+(?:[.,]\\d+)?)");
-    private static final Pattern DISTANCE_PATTERN = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(km|m)", Pattern.CASE_INSENSITIVE);
+    // Janela de 5s para acumular preço e distância de eventos diferentes
+    private static final long ACCUMULATION_WINDOW_MS = 5000;
+    // Throttle de 3s para não emitir a mesma oferta várias vezes
+    private static final long EMIT_THROTTLE_MS = 3000;
 
-    private double tempMaxPrice = 0;
-    private double tempMaxKm = 0;
-    private long lastCaptureTime = 0;
+    // Regex robusto: aceita espaço normal e não-quebrável (\u00A0) que a Uber usa no BR
+    private static final Pattern PRICE_PATTERN = Pattern.compile(
+        "R\\$[\\s\u00A0]*(\\d+(?:[.,]\\d+)?)"
+    );
+    private static final Pattern DISTANCE_PATTERN = Pattern.compile(
+        "(\\d+(?:[.,]\\d+)?)[\\s\u00A0]*(km|m)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // Valores acumulados entre eventos
+    private double accumPrice = 0;
+    private double accumKm = 0;
+    private long firstEventTime = 0; // início da janela de acumulação
+    private long lastEmitTime = 0;
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) return;
 
-        String packageName = event.getPackageName() != null ? event.getPackageName().toString() : "";
-        if (!packageName.contains("ubercab") && !packageName.contains("taxis99") && !packageName.contains("noventaenove")) {
+        String packageName = event.getPackageName() != null
+            ? event.getPackageName().toString() : "";
+
+        // === LOG DIAGNÓSTICO: mostra TODOS os pacotes no Logcat ===
+        // Use: adb logcat -s GigUReader para monitorar
+        // Depois de confirmar o pacote do 99, pode remover esta linha
+        Log.d(TAG, "[DIAGNÓSTICO] Pacote ativo: " + packageName);
+
+        // Aceita Uber Rider, Uber Driver e variantes do 99
+        boolean isUber = packageName.contains("ubercab");
+        boolean is99   = packageName.equals("com.app99.driver")   // 99 Motoristas (oficial)
+                      || packageName.contains("taxis99")
+                      || packageName.contains("noventaenove")
+                      || packageName.contains("com.ninety9")
+                      || packageName.contains("99app");
+
+        if (!isUber && !is99) return;
+
+        Log.d(TAG, "Evento de: " + packageName + " | tipo: " + event.getEventType());
+
+        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+        if (rootNode == null) {
+            Log.w(TAG, "getRootInActiveWindow() retornou null");
             return;
         }
 
-        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-        if (rootNode == null) return;
+        // Verifica se janela de acumulação expirou — se sim, reseta
+        long now = System.currentTimeMillis();
+        if (now - firstEventTime > ACCUMULATION_WINDOW_MS) {
+            Log.d(TAG, "[RESET] Nova janela de acumulação iniciada");
+            accumPrice = 0;
+            accumKm = 0;
+            firstEventTime = now;
+        }
 
-        // Inicia scan limpo para este evento/tela
-        tempMaxPrice = 0;
-        tempMaxKm = 0;
-
+        // Escaneia a árvore de nós e acumula os maiores valores encontrados
         processNode(rootNode);
         rootNode.recycle();
 
-        // Se após ler a tela toda temos valores válidos, emitimos
-        if (tempMaxPrice > 0 && tempMaxKm > 0) {
-            emitOffer(tempMaxPrice, tempMaxKm);
+        Log.d(TAG, "Estado acumulado — Preço: " + accumPrice + " | Km: " + accumKm);
+
+        // Emite quando temos ambos os valores e o throttle permite
+        if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
+            emitOffer(accumPrice, accumKm);
         }
     }
 
     private void processNode(AccessibilityNodeInfo node) {
         if (node == null) return;
 
-        if (node.getText() != null) {
-            String text = node.getText().toString();
-            
-            // Limpa o texto de parênteses e ruídos comuns antes de testar
-            String cleanText = text.replaceAll("[()\\t\\n\\r]", " ");
-            extractData(cleanText);
+        CharSequence textCS = node.getText();
+        CharSequence descCS = node.getContentDescription();
+
+        if (textCS != null) {
+            String clean = textCS.toString().replaceAll("[()\t\n\r]", " ");
+            Log.v(TAG, "  nó texto: " + clean);
+            extractData(clean);
+        }
+        if (descCS != null) {
+            String clean = descCS.toString().replaceAll("[()\t\n\r]", " ");
+            Log.v(TAG, "  nó desc: " + clean);
+            extractData(clean);
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -62,45 +106,49 @@ public class GigUReaderService extends AccessibilityService {
     }
 
     private void extractData(String text) {
-        // Tenta capturar Preço - Pega o maior da tela (evita taxas menores)
         Matcher priceMatcher = PRICE_PATTERN.matcher(text);
-        if (priceMatcher.find()) {
+        while (priceMatcher.find()) {
             double p = parseDouble(priceMatcher.group(1));
-            if (p > tempMaxPrice) {
-                tempMaxPrice = p;
+            // Ignora valores absurdos (< R$1 ou > R$500 provavelmente não são corrida)
+            if (p > 1 && p < 500 && p > accumPrice) {
+                Log.d(TAG, "  -> Preço capturado: R$" + p);
+                accumPrice = p;
             }
         }
 
-        // Tenta capturar Distância - Pega a maior da tela (ignora a retirada, foca na entrega total)
         Matcher distMatcher = DISTANCE_PATTERN.matcher(text);
-        if (distMatcher.find()) {
+        while (distMatcher.find()) {
             double d = parseDouble(distMatcher.group(1));
-            String unit = distMatcher.group(2).toLowerCase();
+            String unit = distMatcher.group(2).toLowerCase().trim();
             double kmValue = unit.equals("m") ? d / 1000.0 : d;
-
-            if (kmValue > tempMaxKm) {
-                tempMaxKm = kmValue;
+            // Ignora distâncias absurdas (< 200m ou > 100km)
+            if (kmValue > 0.2 && kmValue < 100 && kmValue > accumKm) {
+                Log.d(TAG, "  -> Distância capturada: " + kmValue + " km");
+                accumKm = kmValue;
             }
         }
     }
 
     private void emitOffer(double price, double km) {
-        // Evita disparar repetidamente para a mesma oferta no mesmo segundo
-        if (System.currentTimeMillis() - lastCaptureTime < 2000) return;
-
-        Log.d(TAG, "OFERTA DETECTADA: R$ " + price + " em " + km + " km");
+        Log.i(TAG, ">>> OFERTA EMITIDA: R$" + price + " | " + km + " km");
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin != null) {
             plugin.emitOfferReceived("Offer Detected", price, km);
-            lastCaptureTime = System.currentTimeMillis();
+            lastEmitTime = System.currentTimeMillis();
+            // Reseta acumulador após emitir
+            accumPrice = 0;
+            accumKm = 0;
+            firstEventTime = 0;
+        } else {
+            Log.e(TAG, "GigUPlugin.getInstance() é null — WebView pode estar em background!");
         }
     }
 
     private double parseDouble(String value) {
         try {
-            // Remove pontos de milhar e troca vírgula por ponto decimal
-            String cleanView = value.replace(".", "").replace(",", ".");
-            return Double.parseDouble(cleanView);
+            return Double.parseDouble(
+                value.replace("\u00A0", "").replace(".", "").replace(",", ".")
+            );
         } catch (Exception e) {
             return 0;
         }
@@ -108,12 +156,12 @@ public class GigUReaderService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        Log.d(TAG, "Serviço interrompido");
+        Log.w(TAG, "Serviço interrompido");
     }
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        Log.d(TAG, "GigU Accessibility Service conectado!");
+        Log.i(TAG, "=== GigU Accessibility Service CONECTADO e PRONTO ===");
     }
 }

@@ -6,5 +6,5 @@
     android:canRetrieveWindowContent="true"
     android:canRequestFilterKeyEvents="true"
     android:notificationTimeout="10"
-    android:packageNames="com.ubercab,com.ubercab.driver,com.taxis99,com.movile.noventaenove"
+    android:packageNames="com.ubercab,com.ubercab.driver,com.ubercab.eats,com.taxis99,com.movile.noventaenove,com.ninety9,com.app99.driver"
     android:description="@string/accessibility_service_description" />
