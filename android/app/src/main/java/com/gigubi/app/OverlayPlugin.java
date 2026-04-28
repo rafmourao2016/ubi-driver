@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -30,6 +32,7 @@ public class OverlayPlugin extends Plugin {
     private TextView profitText;
     private TextView statsText;
     private TextView badgeText;
+    private GradientDrawable badgeBg;
     private WindowManager.LayoutParams params;
 
     // Debounce: evita piscar ao receber eventos repetidos com valores iguais
@@ -49,12 +52,11 @@ public class OverlayPlugin extends Plugin {
     @PluginMethod
     public void showOverlay(PluginCall call) {
         double netProfit = call.getDouble("netProfit", 0.0);
-        double margin = call.getDouble("margin", 0.0);
+        double margin    = call.getDouble("margin", 0.0);
         double profitPerKm = call.getDouble("profitPerKm", 0.0);
 
         getActivity().runOnUiThread(() -> {
             if (!Settings.canDrawOverlays(getContext())) {
-                // Pede permissão ao usuário
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getContext().getPackageName()));
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -62,13 +64,11 @@ public class OverlayPlugin extends Plugin {
                 call.reject("Permissão de overlay necessária");
                 return;
             }
-
             if (overlayView != null) {
                 updateView(netProfit, margin, profitPerKm);
                 call.resolve();
                 return;
             }
-
             createOverlay(netProfit, margin, profitPerKm);
             call.resolve();
         });
@@ -76,22 +76,15 @@ public class OverlayPlugin extends Plugin {
 
     @PluginMethod
     public void updateOverlay(PluginCall call) {
-        double netProfit = call.getDouble("netProfit", 0.0);
-        double margin = call.getDouble("margin", 0.0);
+        double netProfit   = call.getDouble("netProfit", 0.0);
+        double margin      = call.getDouble("margin", 0.0);
         double profitPerKm = call.getDouble("profitPerKm", 0.0);
-
-        getActivity().runOnUiThread(() -> {
-            updateView(netProfit, margin, profitPerKm);
-            call.resolve();
-        });
+        getActivity().runOnUiThread(() -> { updateView(netProfit, margin, profitPerKm); call.resolve(); });
     }
 
     @PluginMethod
     public void hideOverlay(PluginCall call) {
-        getActivity().runOnUiThread(() -> {
-            removeOverlay();
-            call.resolve();
-        });
+        getActivity().runOnUiThread(() -> { removeOverlay(); call.resolve(); });
     }
 
     @PluginMethod
@@ -101,118 +94,130 @@ public class OverlayPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    // Chamado internamente pelo GigUPlugin sem necessidade de PluginCall
     public void updateFromService(double netProfit, double margin, double profitPerKm) {
-        // Só re-renderiza se os valores mudaram significativamente (evita piscar)
         if (Math.abs(netProfit - lastRenderedProfit) < 0.05
-                && Math.abs(margin - lastRenderedMargin) < 0.5) {
-            return;
-        }
+                && Math.abs(margin - lastRenderedMargin) < 0.5) return;
         lastRenderedProfit = netProfit;
         lastRenderedMargin = margin;
-
         if (getActivity() == null) return;
         getActivity().runOnUiThread(() -> {
-            if (overlayView != null) {
-                updateView(netProfit, margin, profitPerKm);
-            }
+            if (overlayView != null) updateView(netProfit, margin, profitPerKm);
         });
     }
 
-    /** Limpa o overlay e mostra estado "Aguardando oferta..." após inatividade */
     public void clearOverlay() {
         lastRenderedProfit = Double.MIN_VALUE;
         lastRenderedMargin = Double.MIN_VALUE;
-
         if (getActivity() == null) return;
         getActivity().runOnUiThread(() -> {
-            if (profitText != null) {
-                profitText.setText("Aguardando...");
-                statsText.setText("Nenhuma oferta detectada");
-                badgeText.setText("OCIOSO");
-                badgeText.setBackgroundColor(android.graphics.Color.parseColor("#374151"));
-            }
+            if (profitText == null) return;
+            profitText.setText("Aguardando...");
+            statsText.setText("Nenhuma oferta");
+            badgeText.setText("OCIOSO");
+            badgeBg.setColor(Color.parseColor("#374151"));
         });
     }
 
+    // ─────────────────────────────────────────────────────────────
+    //  Design "fofinho" — cantos arredondados, gradiente, pill badge
+    // ─────────────────────────────────────────────────────────────
     private void createOverlay(double netProfit, double margin, double profitPerKm) {
         windowManager = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
 
-        // Root container com fundo escuro translúcido
+        // ── Root frame com cantos arredondados e gradiente ──
         overlayView = new FrameLayout(getContext());
-        overlayView.setBackgroundColor(Color.parseColor("#E6121212"));
 
-        // Inner layout vertical
+        GradientDrawable rootBg = new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[]{ Color.parseColor("#F0131325"), Color.parseColor("#F00D0D1C") }
+        );
+        rootBg.setCornerRadius(dp(22));
+        rootBg.setStroke(dp(1), Color.parseColor("#6D28D9")); // borda roxa
+        overlayView.setBackground(rootBg);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            overlayView.setElevation(dp(8));
+        }
+
+        // ── Inner layout ──
         LinearLayout inner = new LinearLayout(getContext());
         inner.setOrientation(LinearLayout.VERTICAL);
-        inner.setPadding(dp(16), dp(12), dp(16), dp(12));
+        inner.setPadding(dp(14), dp(10), dp(14), dp(12));
 
-        // ── Badge (ELITE / ACEITÁVEL / BAIXO LUCRO) ──
+        // ── Linha superior: título | espaço | badge | fechar ──
+        LinearLayout topRow = new LinearLayout(getContext());
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(getContext());
+        title.setText("UBI");
+        title.setTextColor(Color.parseColor("#A78BFA"));
+        title.setTextSize(9);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setLetterSpacing(0.15f);
+
+        View spacer = new View(getContext());
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
+
+        // Badge pill arredondado
+        badgeBg = new GradientDrawable();
+        badgeBg.setCornerRadius(dp(20));
+
         badgeText = new TextView(getContext());
-        badgeText.setTextSize(11);
-        badgeText.setAllCaps(true);
-        badgeText.setPadding(dp(10), dp(4), dp(10), dp(4));
+        badgeText.setTextSize(9);
+        badgeText.setTypeface(null, Typeface.BOLD);
         badgeText.setTextColor(Color.WHITE);
+        badgeText.setPadding(dp(8), dp(3), dp(8), dp(3));
+        badgeText.setBackground(badgeBg);
 
-        LinearLayout badgeRow = new LinearLayout(getContext());
-        badgeRow.setOrientation(LinearLayout.HORIZONTAL);
-        badgeRow.setGravity(Gravity.END);
-
-        // ── Botão fechar ──
+        // Botão fechar
         TextView closeBtn = new TextView(getContext());
         closeBtn.setText("  ✕");
-        closeBtn.setTextColor(Color.parseColor("#888888"));
-        closeBtn.setTextSize(16);
+        closeBtn.setTextColor(Color.parseColor("#6B7280"));
+        closeBtn.setTextSize(13);
         closeBtn.setOnClickListener(v -> removeOverlay());
 
-        badgeRow.addView(badgeText);
-        badgeRow.addView(closeBtn);
-
-        // ── Titulo ──
-        TextView title = new TextView(getContext());
-        title.setText("UBI SMART DRIVER");
-        title.setTextColor(Color.parseColor("#A78BFA"));
-        title.setTextSize(10);
-        title.setAllCaps(true);
+        topRow.addView(title);
+        topRow.addView(spacer);
+        topRow.addView(badgeText);
+        topRow.addView(closeBtn);
 
         // ── Lucro principal ──
         profitText = new TextView(getContext());
         profitText.setTextColor(Color.WHITE);
-        profitText.setTextSize(32);
-        profitText.setPadding(0, dp(2), 0, dp(2));
+        profitText.setTextSize(30);
+        profitText.setTypeface(null, Typeface.BOLD);
+        profitText.setPadding(0, dp(6), 0, dp(2));
 
-        // ── Stats secundários ──
+        // ── Stats: margem e por km ──
         statsText = new TextView(getContext());
-        statsText.setTextColor(Color.parseColor("#AAAAAA"));
-        statsText.setTextSize(13);
+        statsText.setTextColor(Color.parseColor("#9CA3AF"));
+        statsText.setTextSize(11);
 
-        inner.addView(badgeRow);
-        inner.addView(title);
+        inner.addView(topRow);
         inner.addView(profitText);
         inner.addView(statsText);
         overlayView.addView(inner);
 
-        // Atualiza valores iniciais
         updateView(netProfit, margin, profitPerKm);
 
-        // WindowManager params
+        // ── WindowManager params ──
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
         params = new WindowManager.LayoutParams(
-                dp(260),
+                dp(210),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
         );
-
         params.gravity = Gravity.TOP | Gravity.END;
-        params.x = dp(8);
+        params.x = dp(10);
         params.y = dp(80);
 
-        // Drag support
+        // ── Drag ──
         overlayView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -221,14 +226,14 @@ public class OverlayPlugin extends Plugin {
             public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        initialX = params.x;
-                        initialY = params.y;
+                        initialX     = params.x;
+                        initialY     = params.y;
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
                         return true;
                     case MotionEvent.ACTION_MOVE:
-                        params.x = initialX - (int) (event.getRawX() - initialTouchX);
-                        params.y = initialY + (int) (event.getRawY() - initialTouchY);
+                        params.x = initialX - (int)(event.getRawX() - initialTouchX);
+                        params.y = initialY + (int)(event.getRawY() - initialTouchY);
                         windowManager.updateViewLayout(overlayView, params);
                         return true;
                 }
@@ -242,41 +247,35 @@ public class OverlayPlugin extends Plugin {
     private void updateView(double netProfit, double margin, double profitPerKm) {
         if (profitText == null) return;
 
-        // Formata valores
-        String profit = String.format("R$ %.2f", netProfit).replace('.', ',');
-        String stats = String.format("Margem: %.1f%%  •  R$%.2f/km", margin, profitPerKm)
-                .replace('.', ',');
+        profitText.setText(String.format("R$ %.2f", netProfit).replace('.', ','));
+        statsText.setText(
+            String.format("%.1f%% margem  ·  R$%.2f/km", margin, profitPerKm).replace('.', ',')
+        );
 
-        profitText.setText(profit);
-        statsText.setText(stats);
-
-        // Badge colorido por margem
         if (margin >= 30) {
-            badgeText.setText("ELITE");
-            badgeText.setBackgroundColor(Color.parseColor("#16A34A"));
+            badgeText.setText("ELITE ★");
+            badgeBg.setColor(Color.parseColor("#059669")); // verde esmeralda
         } else if (margin >= 15) {
-            badgeText.setText("ACEITÁVEL");
-            badgeText.setBackgroundColor(Color.parseColor("#CA8A04"));
+            badgeText.setText("OK ●");
+            badgeBg.setColor(Color.parseColor("#D97706")); // âmbar
         } else {
-            badgeText.setText("BAIXO LUCRO");
-            badgeText.setBackgroundColor(Color.parseColor("#DC2626"));
+            badgeText.setText("BAIXO ▼");
+            badgeBg.setColor(Color.parseColor("#DC2626")); // vermelho
         }
     }
 
     private void removeOverlay() {
         if (overlayView != null && windowManager != null) {
-            try {
-                windowManager.removeView(overlayView);
-            } catch (Exception ignored) {}
+            try { windowManager.removeView(overlayView); } catch (Exception ignored) {}
             overlayView = null;
-            profitText = null;
-            statsText = null;
-            badgeText = null;
+            profitText  = null;
+            statsText   = null;
+            badgeText   = null;
+            badgeBg     = null;
         }
     }
 
     private int dp(int value) {
-        float density = getContext().getResources().getDisplayMetrics().density;
-        return (int) (value * density);
+        return (int)(value * getContext().getResources().getDisplayMetrics().density);
     }
 }
