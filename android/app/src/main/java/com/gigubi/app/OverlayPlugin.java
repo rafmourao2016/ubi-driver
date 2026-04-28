@@ -32,6 +32,10 @@ public class OverlayPlugin extends Plugin {
     private TextView badgeText;
     private WindowManager.LayoutParams params;
 
+    // Debounce: evita piscar ao receber eventos repetidos com valores iguais
+    private double lastRenderedProfit = Double.MIN_VALUE;
+    private double lastRenderedMargin = Double.MIN_VALUE;
+
     @Override
     public void load() {
         super.load();
@@ -99,6 +103,14 @@ public class OverlayPlugin extends Plugin {
 
     // Chamado internamente pelo GigUPlugin sem necessidade de PluginCall
     public void updateFromService(double netProfit, double margin, double profitPerKm) {
+        // Só re-renderiza se os valores mudaram significativamente (evita piscar)
+        if (Math.abs(netProfit - lastRenderedProfit) < 0.05
+                && Math.abs(margin - lastRenderedMargin) < 0.5) {
+            return;
+        }
+        lastRenderedProfit = netProfit;
+        lastRenderedMargin = margin;
+
         if (getActivity() == null) return;
         getActivity().runOnUiThread(() -> {
             if (overlayView != null) {

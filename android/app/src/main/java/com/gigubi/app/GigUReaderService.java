@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,9 +28,12 @@ public class GigUReaderService extends AccessibilityService {
 
     // Valores acumulados entre eventos
     private double accumPrice = 0;
-    private double accumKm = 0;
-    private long firstEventTime = 0; // início da janela de acumulação
-    private long lastEmitTime = 0;
+    private double accumKm   = 0;
+    private long firstEventTime = 0;
+    private long lastEmitTime   = 0;
+
+    // Lista temporária de km coletados em UM evento (para somar trecho de ida + corrida)
+    private final List<Double> eventKmList = new ArrayList<>();
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -69,11 +74,22 @@ public class GigUReaderService extends AccessibilityService {
             firstEventTime = now;
         }
 
-        // Escaneia a árvore de nós e acumula os maiores valores encontrados
+        // Escaneia a árvore de nós para este evento
+        eventKmList.clear();
         processNode(rootNode);
         rootNode.recycle();
 
-        Log.d(TAG, "Estado acumulado — Preço: " + accumPrice + " | Km: " + accumKm);
+        // Soma TODOS os trechos de km encontrados na tela (ida ao passageiro + corrida)
+        if (!eventKmList.isEmpty()) {
+            double eventTotalKm = 0;
+            for (double km : eventKmList) eventTotalKm += km;
+            if (eventTotalKm > accumKm) {
+                Log.d(TAG, "  -> Km total do evento (soma): " + eventTotalKm + " km");
+                accumKm = eventTotalKm;
+            }
+        }
+
+        Log.d(TAG, "Estado acumulado — Preço: " + accumPrice + " | Km total: " + accumKm);
 
         // Emite quando temos ambos os valores e o throttle permite
         if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
@@ -116,15 +132,20 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
 
+        // Coleta cada trecho de km separadamente na lista do evento
+        // (ida ao passageiro + distância da corrida = distância total rodada)
         Matcher distMatcher = DISTANCE_PATTERN.matcher(text);
         while (distMatcher.find()) {
             double d = parseDouble(distMatcher.group(1));
             String unit = distMatcher.group(2).toLowerCase().trim();
             double kmValue = unit.equals("m") ? d / 1000.0 : d;
             // Ignora distâncias absurdas (< 200m ou > 100km)
-            if (kmValue > 0.2 && kmValue < 100 && kmValue > accumKm) {
-                Log.d(TAG, "  -> Distância capturada: " + kmValue + " km");
-                accumKm = kmValue;
+            if (kmValue > 0.2 && kmValue < 100) {
+                // Evita duplicatas exatas na mesma varredura
+                if (!eventKmList.contains(kmValue)) {
+                    Log.d(TAG, "  -> Km parcial: " + kmValue + " km");
+                    eventKmList.add(kmValue);
+                }
             }
         }
     }
