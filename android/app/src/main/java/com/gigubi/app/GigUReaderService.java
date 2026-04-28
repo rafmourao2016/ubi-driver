@@ -197,9 +197,14 @@ public class GigUReaderService extends AccessibilityService {
 
     private double parseDouble(String value) {
         try {
-            return Double.parseDouble(
-                value.replace("\u00A0", "").replace(".", "").replace(",", ".")
-            );
+            value = value.replace("\u00A0", "").trim();
+            // Se tiver vírgula, assume formato BR (ex: 1.234,56 ou 10,8)
+            if (value.contains(",")) {
+                value = value.replace(".", "");  // remove separador de milhar
+                value = value.replace(",", "."); // converte vírgula decimal para ponto
+            }
+            // Se não tiver vírgula (ex: 10.8), o Double.parseDouble já entende o ponto como decimal.
+            return Double.parseDouble(value);
         } catch (Exception e) {
             return 0;
         }

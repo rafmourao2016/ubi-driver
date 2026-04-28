@@ -111,8 +111,9 @@ public class OverlayPlugin extends Plugin {
         if (getActivity() == null) return;
         getActivity().runOnUiThread(() -> {
             if (profitText == null) return;
-            profitText.setText("Aguardando...");
-            statsText.setText("Nenhuma oferta");
+            profitText.setText("Buscando...");
+            profitText.setTextSize(24);
+            statsText.setText("Aguardando nova corrida");
             badgeText.setText("OCIOSO");
             badgeBg.setColor(Color.parseColor("#374151"));
         });
@@ -247,6 +248,7 @@ public class OverlayPlugin extends Plugin {
     private void updateView(double netProfit, double margin, double profitPerKm) {
         if (profitText == null) return;
 
+        profitText.setTextSize(30);
         profitText.setText(String.format("R$ %.2f", netProfit).replace('.', ','));
         statsText.setText(
             String.format("%.1f%% margem  ·  R$%.2f/km", margin, profitPerKm).replace('.', ',')
