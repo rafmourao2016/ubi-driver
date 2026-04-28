@@ -56,7 +56,7 @@ public class GigUReaderService extends AccessibilityService {
 
         // Aceita Uber Rider, Uber Driver e variantes do 99
         boolean isUber = packageName.contains("ubercab");
-        boolean is99   = packageName.equals("com.app99.driver")   // 99 Motoristas (oficial)
+        boolean is99   = packageName.equals("com.app99.driver")
                       || packageName.contains("taxis99")
                       || packageName.contains("noventaenove")
                       || packageName.contains("com.ninety9")
@@ -87,9 +87,12 @@ public class GigUReaderService extends AccessibilityService {
         rootNode.recycle();
 
         // Soma TODOS os trechos de km encontrados na tela (ida ao passageiro + corrida)
-        // IMPORTANTE: exige ao menos 2 distâncias — toda oferta real do 99 mostra
-        // pickup km + trip km. Telas de home (ex: "99 Abastece") só geram 0 ou 1 km.
-        if (eventKmList.size() >= 2) {
+        // A regra de exigir >= 2 trechos é para evitar o "99 Abastece" da 99.
+        // A Uber não tem esse problema, e a árvore da Uber pode carregar os nós
+        // progressivamente, então para Uber aceitamos se tiver ao menos 1 km.
+        int minKmRequired = isUber ? 1 : 2;
+
+        if (eventKmList.size() >= minKmRequired) {
             double eventTotalKm = 0;
             for (double km : eventKmList) eventTotalKm += km;
             if (eventTotalKm > accumKm) {
