@@ -134,6 +134,11 @@ input:focus {
   animation: float 6s ease-in-out infinite;
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 .chip {
   padding: 4px 12px;
   border-radius: 100px;
