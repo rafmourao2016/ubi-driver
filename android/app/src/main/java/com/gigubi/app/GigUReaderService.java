@@ -87,13 +87,17 @@ public class GigUReaderService extends AccessibilityService {
         rootNode.recycle();
 
         // Soma TODOS os trechos de km encontrados na tela (ida ao passageiro + corrida)
-        if (!eventKmList.isEmpty()) {
+        // IMPORTANTE: exige ao menos 2 distâncias — toda oferta real do 99 mostra
+        // pickup km + trip km. Telas de home (ex: "99 Abastece") só geram 0 ou 1 km.
+        if (eventKmList.size() >= 2) {
             double eventTotalKm = 0;
             for (double km : eventKmList) eventTotalKm += km;
             if (eventTotalKm > accumKm) {
-                Log.d(TAG, "  -> Km total do evento (soma): " + eventTotalKm + " km");
+                Log.d(TAG, "  -> Km total (soma de " + eventKmList.size() + " trechos): " + eventTotalKm + " km");
                 accumKm = eventTotalKm;
             }
+        } else if (!eventKmList.isEmpty()) {
+            Log.d(TAG, "  [IGNORADO] Só " + eventKmList.size() + " km na tela — provável tela home/idle");
         }
 
         Log.d(TAG, "Estado acumulado — Preço: " + accumPrice + " | Km total: " + accumKm);
