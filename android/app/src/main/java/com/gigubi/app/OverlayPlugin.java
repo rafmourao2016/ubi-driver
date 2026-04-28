@@ -119,6 +119,22 @@ public class OverlayPlugin extends Plugin {
         });
     }
 
+    /** Limpa o overlay e mostra estado "Aguardando oferta..." após inatividade */
+    public void clearOverlay() {
+        lastRenderedProfit = Double.MIN_VALUE;
+        lastRenderedMargin = Double.MIN_VALUE;
+
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            if (profitText != null) {
+                profitText.setText("Aguardando...");
+                statsText.setText("Nenhuma oferta detectada");
+                badgeText.setText("OCIOSO");
+                badgeText.setBackgroundColor(android.graphics.Color.parseColor("#374151"));
+            }
+        });
+    }
+
     private void createOverlay(double netProfit, double margin, double profitPerKm) {
         windowManager = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
 

@@ -6,6 +6,8 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,6 +18,8 @@ public class GigUReaderService extends AccessibilityService {
     private static final long ACCUMULATION_WINDOW_MS = 5000;
     // Throttle de 3s para não emitir a mesma oferta várias vezes
     private static final long EMIT_THROTTLE_MS = 3000;
+    // Tempo sem oferta para limpar o overlay (30s)
+    private static final long IDLE_CLEAR_MS = 30_000;
 
     // Regex robusto: aceita espaço normal e não-quebrável (\u00A0) que a Uber usa no BR
     private static final Pattern PRICE_PATTERN = Pattern.compile(
@@ -31,6 +35,9 @@ public class GigUReaderService extends AccessibilityService {
     private double accumKm   = 0;
     private long firstEventTime = 0;
     private long lastEmitTime   = 0;
+
+    // Timer para limpar overlay quando motorista fica ocioso
+    private Timer idleTimer = null;
 
     // Lista temporária de km coletados em UM evento (para somar trecho de ida + corrida)
     private final List<Double> eventKmList = new ArrayList<>();
@@ -94,7 +101,26 @@ public class GigUReaderService extends AccessibilityService {
         // Emite quando temos ambos os valores e o throttle permite
         if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
             emitOffer(accumPrice, accumKm);
+            resetIdleTimer(); // reinicia o contador de inatividade
         }
+    }
+
+    /** Reinicia o timer que limpa o overlay após 30s sem oferta */
+    private void resetIdleTimer() {
+        if (idleTimer != null) idleTimer.cancel();
+        idleTimer = new Timer();
+        idleTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                Log.d(TAG, "[IDLE] 30s sem oferta — limpando overlay");
+                OverlayPlugin overlay = OverlayPlugin.getInstance();
+                if (overlay != null) overlay.clearOverlay();
+                // Reseta acumulador
+                accumPrice = 0;
+                accumKm = 0;
+                firstEventTime = 0;
+            }
+        }, IDLE_CLEAR_MS);
     }
 
     private void processNode(AccessibilityNodeInfo node) {
