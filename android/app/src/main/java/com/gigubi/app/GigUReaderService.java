@@ -105,11 +105,11 @@ public class GigUReaderService extends AccessibilityService {
 
         // ── 2) Fallback: janela ativa (quando source é null) ──
         if (eventRoot == null) {
-            AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
-            if (activeRoot != null) {
-                eventWindowId = activeRoot.getWindowId();
-                processWindowRoot(activeRoot, event.getEventType());
-                activeRoot.recycle();
+            AccessibilityNodeInfo fallbackRoot = getRootInActiveWindow();
+            if (fallbackRoot != null) {
+                eventWindowId = fallbackRoot.getWindowId();
+                processWindowRoot(fallbackRoot, event.getEventType());
+                fallbackRoot.recycle();
             }
         }
 
