@@ -5,16 +5,31 @@ import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
+import android.graphics.Bitmap;
+import android.util.DisplayMetrics;
+import android.content.Intent;
+import android.view.Display;
+import android.view.WindowManager;
+
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+
 import com.getcapacitor.JSObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class GigUReaderService extends AccessibilityService {
     private static final String TAG = "GigUReader";
+    private static GigUReaderService instance;
+
+    public static GigUReaderService getInstance() { return instance; }
 
     private static final long ACCUMULATION_WINDOW_MS = 5000;
     private static final long EMIT_THROTTLE_MS = 3000;
@@ -602,6 +617,53 @@ public class GigUReaderService extends AccessibilityService {
         }
     }
 
+    public void triggerOcr() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            Log.w(TAG, "OCR não suportado (Requer Android 11+)");
+            return;
+        }
+
+        Log.d(TAG, "Iniciando captura de tela para OCR...");
+        
+        takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
+            @Override
+            public void onSuccess(ScreenshotResult screenshotResult) {
+                Bitmap bitmap = Bitmap.wrapHardwareBuffer(
+                    screenshotResult.getHardwareBuffer(),
+                    screenshotResult.getColorSpace()
+                );
+                
+                if (bitmap != null) {
+                    processBitmapWithOcr(bitmap);
+                }
+            }
+
+            @Override
+            public void onFailure(int errorCode) {
+                Log.e(TAG, "Falha ao capturar screenshot: " + errorCode);
+            }
+        });
+    }
+
+    private void processBitmapWithOcr(Bitmap bitmap) {
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        com.google.mlkit.vision.text.TextRecognizer recognizer = 
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+
+        recognizer.process(image)
+            .addOnSuccessListener(visionText -> {
+                String resultText = visionText.getText();
+                Log.d(TAG, "OCR RESULT: " + resultText);
+                GigUPlugin plugin = GigUPlugin.getInstance();
+                if (plugin != null) {
+                    plugin.processRawText(resultText, "unknown", "OCR");
+                }
+            })
+            .addOnFailureListener(e -> {
+                Log.e(TAG, "Erro no OCR: " + e.getMessage());
+            });
+    }
+
     private double parseDouble(String value) {
         try {
             value = value.replace("\u00A0", "").trim();
@@ -617,6 +679,13 @@ public class GigUReaderService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        instance = this;
         Log.i(TAG, "=== GigU Accessibility CONECTADO ===");
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        instance = null;
+        return super.onUnbind(intent);
     }
 }

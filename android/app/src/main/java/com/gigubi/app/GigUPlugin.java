@@ -20,9 +20,16 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 @CapacitorPlugin(name = "GigUPlugin")
 public class GigUPlugin extends Plugin {
     private static GigUPlugin instance;
+
+    private static final Pattern PRICE_PATTERN = Pattern.compile("R\\$[\\s\u00A0]*(\\d+(?:[.,]\\d+)?)");
+    private static final Pattern DISTANCE_PATTERN = Pattern.compile("(\\d+(?:[.,]\\d+)?)[\\s\u00A0]*(km|m)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)[\\s\u00A0]*(min|mín)\\b", Pattern.CASE_INSENSITIVE);
 
     // Custos mutáveis sincronizados pelo JavaScript
     private double fuelPrice = 5.80;
@@ -77,10 +84,28 @@ public class GigUPlugin extends Plugin {
     public void checkPermissions(PluginCall call) {
         boolean hasOverlay      = Settings.canDrawOverlays(getContext());
         boolean hasAccessibility = isAccessibilityServiceEnabled();
+        boolean hasNotification = isNotificationServiceEnabled();
+
         JSObject ret = new JSObject();
         ret.put("overlayGranted", hasOverlay);
         ret.put("accessibilityGranted", hasAccessibility);
+        ret.put("notificationGranted", hasNotification);
         call.resolve(ret);
+    }
+
+    private boolean isNotificationServiceEnabled() {
+        String pkgName = getContext().getPackageName();
+        final String flat = Settings.Secure.getString(getContext().getContentResolver(),
+                "enabled_notification_listeners");
+        if (!TextUtils.isEmpty(flat)) {
+            final String[] names = flat.split(":");
+            for (String name : names) {
+                if (name.contains(pkgName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Abre direto a tela de permissão 'Aparecer sobre outros apps' do Ubi */
@@ -104,6 +129,15 @@ public class GigUPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Abre a tela de 'Acesso a Notificações' */
+    @PluginMethod
+    public void openNotificationSettings(PluginCall call) {
+        Intent intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
+
     /** Verifica se o GigUReaderService está ativo na Acessibilidade */
     private boolean isAccessibilityServiceEnabled() {
         try {
@@ -121,6 +155,54 @@ public class GigUPlugin extends Plugin {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public void processRawText(String rawText, String pkg, String source) {
+        if (rawText == null || rawText.isEmpty()) return;
+
+        double price = 0;
+        double km = 0;
+        double time = 0;
+
+        Matcher pm = PRICE_PATTERN.matcher(rawText);
+        if (pm.find()) price = parseDouble(pm.group(1));
+
+        Matcher dm = DISTANCE_PATTERN.matcher(rawText);
+        while (dm.find()) {
+            double d = parseDouble(dm.group(1));
+            String unit = dm.group(2).toLowerCase();
+            if (unit.equals("m")) d = d / 1000.0;
+            if (d > km) km = d;
+        }
+
+        Matcher tm = TIME_PATTERN.matcher(rawText);
+        if (tm.find()) time = parseDouble(tm.group(1));
+
+        Log.d("GigUPlugin", "[" + source + "] Extraído: R$" + price + " | " + km + "km | " + time + "min");
+
+        if (price > 0 && km > 0) {
+            emitOfferReceived(rawText, price, km, time, 1.0);
+        } else {
+            // Se falhou e veio da Notificação, pode sinalizar para tentar OCR
+            if (source.equals("Notification")) {
+                Log.d("GigUPlugin", "Notificação incompleta. OCR pode ser necessário.");
+                // Aqui poderíamos disparar o OCR no ReaderService via um broadcast ou singleton
+                GigUReaderService reader = GigUReaderService.getInstance();
+                if (reader != null) {
+                    reader.triggerOcr();
+                }
+            }
+        }
+    }
+
+    private double parseDouble(String value) {
+        try {
+            value = value.replace("\u00A0", "").trim();
+            if (value.contains(",")) {
+                value = value.replace(".", "").replace(",", ".");
+            }
+            return Double.parseDouble(value);
+        } catch (Exception e) { return 0; }
     }
 
     public void emitOfferReceived(String rawText, double price, double km, double timeMin, double surge) {
