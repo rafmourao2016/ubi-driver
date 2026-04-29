@@ -152,6 +152,7 @@ public class GigUReaderService extends AccessibilityService {
             }
         } else if (!eventKmList.isEmpty()) {
             Log.d(TAG, "  [AGUARDANDO] " + eventKmList.size() + " km — esperando mais trechos");
+            notifyDiag("[WAIT] Trechos: " + eventKmList.size() + "/" + minKm + " (p=" + accumPrice + ")");
         }
 
         Log.d(TAG, "Acumulado: R$" + accumPrice + " | " + accumKm + " km");
@@ -204,7 +205,10 @@ public class GigUReaderService extends AccessibilityService {
         String fullText = sb.toString();
         
         if (fullText.trim().isEmpty()) {
-            if (pkg != null) Log.d(TAG, "processWindowRoot abortado: fullText vazio (tipo " + eventType + ")");
+            if (pkg != null) {
+                Log.d(TAG, "processWindowRoot abortado: fullText vazio (tipo " + eventType + ")");
+                // Comentado para evitar flood na tela, mas no logcat ajuda
+            }
             return;
         }
 
@@ -216,6 +220,7 @@ public class GigUReaderService extends AccessibilityService {
 
         if (pkg != null) {
             Log.d(TAG, "extractRideInfo chamado - pacote: " + pkg.toString() + " | tipo: " + eventType);
+            notifyDiag("[INFO] Extracting: " + pkg.toString());
         }
 
         RideInfo info = extractRideInfo(root, fullText);
@@ -288,7 +293,10 @@ public class GigUReaderService extends AccessibilityService {
             info.layerUsed = "Camada 3: Regex";
             return info;
         }
+        
+        String snippet = fullText.length() > 60 ? fullText.substring(0, 60) + "..." : fullText;
         Log.d(TAG, "Camada 3 falhou — texto concatenado: " + fullText);
+        notifyDiag("[FAIL] Layers 1,2,3 failed. Text: " + snippet);
 
         return null;
     }
