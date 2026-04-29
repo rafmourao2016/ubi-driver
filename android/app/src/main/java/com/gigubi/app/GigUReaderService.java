@@ -192,11 +192,7 @@ public class GigUReaderService extends AccessibilityService {
     private void notifyDiag(String msg) {
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin == null) return;
-        try {
-            JSObject evt = new JSObject();
-            evt.put("msg", msg);
-            plugin.notifyListeners("onDiagLog", evt);
-        } catch (Exception ignored) {}
+        plugin.sendDiagLog(msg);
     }
 
     private double parseDouble(String value) {

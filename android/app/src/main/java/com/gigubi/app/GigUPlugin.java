@@ -39,6 +39,15 @@ public class GigUPlugin extends Plugin {
         return instance;
     }
 
+    /** Wrapper público para emitir logs de diagnóstico ao JS (notifyListeners é protected) */
+    public void sendDiagLog(String msg) {
+        try {
+            JSObject evt = new JSObject();
+            evt.put("msg", msg);
+            notifyListeners("onDiagLog", evt);
+        } catch (Exception ignored) {}
+    }
+
     @PluginMethod
     public void updateSettings(PluginCall call) {
         this.fuelPrice = call.getDouble("fuelPrice", 5.80);
