@@ -60,22 +60,24 @@ public class GigUReaderService extends AccessibilityService {
             Log.d(TAG, "[PKG_ALL] " + pkg + " | tipo: " + event.getEventType());
         }
 
-        // ── Filtro Estrito: Evento e Janela Ativa devem ser Uber/99 ──
+        // ── Filtro Estrito: Evento OU Janela Ativa devem ser Uber/99 ──
         boolean eventIsUber = pkg.contains("ubercab");
         boolean eventIs99   = pkg.contains("app99") || pkg.contains("taxis") || pkg.contains("noventaenove");
-        if (!eventIsUber && !eventIs99) return;
 
         AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
-        if (activeRoot == null) return;
-        String activePkg = activeRoot.getPackageName() != null ? activeRoot.getPackageName().toString() : "";
+        String activePkg = "";
+        if (activeRoot != null) {
+            activePkg = activeRoot.getPackageName() != null ? activeRoot.getPackageName().toString() : "";
+            activeRoot.recycle();
+        }
+        
         boolean activeIsUber = activePkg.contains("ubercab");
         boolean activeIs99   = activePkg.contains("app99") || activePkg.contains("taxis") || activePkg.contains("noventaenove");
-        activeRoot.recycle();
 
-        if (!activeIsUber && !activeIs99) return;
+        if (!eventIsUber && !eventIs99 && !activeIsUber && !activeIs99) return;
 
-        if (eventIsUber) currentAppIsUber = true;
-        if (eventIs99)   currentAppIsUber = false;
+        if (eventIsUber || activeIsUber) currentAppIsUber = true;
+        if (eventIs99 || activeIs99)     currentAppIsUber = false;
 
         Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
         notifyDiag("[✓ UBER/99] " + pkg + " tipo:" + event.getEventType());
