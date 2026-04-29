@@ -4,6 +4,7 @@ import React, { useMemo, useEffect, useState } from 'react';
 import { calculateProfit } from '../lib/calculations';
 import { useSync } from '../hooks/useSync';
 import PiPMode from './PiPMode';
+import DiagLog from './DiagLog';
 
 export default function Calculator() {
   const { data: input, setData: setInput, syncData, loading, lastSynced } = useSync({
@@ -363,6 +364,7 @@ export default function Calculator() {
         </p>
       )}
 
+      <DiagLog />
 
       <PiPMode
         netProfit={results.netProfit}

@@ -5,6 +5,7 @@ import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
+import com.getcapacitor.JSObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -183,7 +184,19 @@ public class GigUReaderService extends AccessibilityService {
             accumPrice = 0; accumKm = 0; firstEventTime = 0;
         } else {
             Log.e(TAG, "GigUPlugin null!");
+            notifyDiag("[LEITOR] GigUPlugin null — WebView em background?");
         }
+    }
+
+    /** Emite log de diagnóstico para o UI do app */
+    private void notifyDiag(String msg) {
+        GigUPlugin plugin = GigUPlugin.getInstance();
+        if (plugin == null) return;
+        try {
+            JSObject evt = new JSObject();
+            evt.put("msg", msg);
+            plugin.notifyListeners("onDiagLog", evt);
+        } catch (Exception ignored) {}
     }
 
     private double parseDouble(String value) {

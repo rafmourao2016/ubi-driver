@@ -115,29 +115,39 @@ public class GigUPlugin extends Plugin {
     }
 
     public void emitOfferReceived(String rawText, double price, double km) {
-        // Emite para a camada JS (Pode ser usado para logs ou persistência)
+        // Emite para a camada JS
         JSObject ret = new JSObject();
         ret.put("rawText", rawText);
         ret.put("price", price);
         ret.put("km", km);
         notifyListeners("onUberOffer", ret);
 
-        // Calcula lucro no lado nativo usando os custos sincronizados
-        double fuelCost     = (km / fuelConsumption) * fuelPrice;
-        double platformFee  = price * platformFeePercent;
-        double netProfit    = price - fuelCost - platformFee;
-        double margin       = price > 0 ? (netProfit / price) * 100.0 : 0;
-        double profitPerKm  = km > 0 ? netProfit / km : 0;
+        // Calcula lucro no lado nativo
+        double fuelCost    = (km / fuelConsumption) * fuelPrice;
+        double platformFee = price * platformFeePercent;
+        double netProfit   = price - fuelCost - platformFee;
+        double margin      = price > 0 ? (netProfit / price) * 100.0 : 0;
+        double profitPerKm = km > 0 ? netProfit / km : 0;
 
-        // Atualiza a overlay nativa imediatamente
+        // Emite log de diagnóstico para o UI
+        JSObject logEvt = new JSObject();
+        logEvt.put("msg", String.format("[OFERTA] R$%.2f | %.1fkm | Lucro: R$%.2f (%.0f%%)",
+            price, km, netProfit, margin));
+        notifyListeners("onDiagLog", logEvt);
+
+        // Atualiza overlay nativo
         OverlayPlugin overlay = OverlayPlugin.getInstance();
         if (overlay != null) {
             overlay.updateFromService(netProfit, margin, profitPerKm);
+        } else {
+            JSObject logEvt2 = new JSObject();
+            logEvt2.put("msg", "[ERRO] OverlayPlugin null — overlay não está ativo");
+            notifyListeners("onDiagLog", logEvt2);
         }
 
-        // Dispara feedback (vibração + som)
         triggerFeedback(margin);
     }
+
 
 
     private void triggerFeedback(double margin) {
