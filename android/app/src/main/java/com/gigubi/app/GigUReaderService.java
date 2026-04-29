@@ -80,8 +80,7 @@ public class GigUReaderService extends AccessibilityService {
 
         eventKmList.clear();
 
-        // ── Estratégia principal: escaneia a raiz do nó que gerou o evento ──
-        // event.getSource() → raiz da janela EXATA que disparou o evento (mais confiável)
+        // ── 1) Janela do evento (via source node → raiz) ──
         AccessibilityNodeInfo eventRoot = getEventRoot(event);
         int eventWindowId = -1;
         if (eventRoot != null) {
@@ -90,13 +89,27 @@ public class GigUReaderService extends AccessibilityService {
             eventRoot.recycle();
         }
 
-        // ── Complemento: demais janelas (bottom sheet Uber, dialogs) ──
+        // ── 2) Fallback: janela ativa (quando source é null) ──
+        if (eventRoot == null) {
+            AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
+            if (activeRoot != null) {
+                eventWindowId = activeRoot.getWindowId();
+                processNode(activeRoot);
+                activeRoot.recycle();
+            }
+        }
+
+        // ── 3) Janelas extras — SÓ TYPE_APPLICATION ──
+        // TYPE_INPUT_METHOD = teclado, TYPE_SYSTEM = nossa overlay e barras do sistema
+        // Só escaneamos janelas de app (evita ler nosso próprio overlay!)
         try {
             List<AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
                 for (AccessibilityWindowInfo window : windows) {
-                    if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
-                    if (window.getId() == eventWindowId) continue; // já escaneou
+                    int wType = window.getType();
+                    // Só janelas de aplicativo — ignora sistema, teclado e overlays
+                    if (wType != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                    if (window.getId() == eventWindowId) continue;
                     AccessibilityNodeInfo root = window.getRoot();
                     if (root == null) continue;
                     processNode(root);
@@ -151,6 +164,13 @@ public class GigUReaderService extends AccessibilityService {
 
     private void processNode(AccessibilityNodeInfo node) {
         if (node == null) return;
+
+        // ── Regra de Ouro: NUNCA ler nosso próprio app/overlay ──
+        CharSequence pkg = node.getPackageName();
+        if (pkg != null && pkg.toString().contains("com.gigubi.app")) {
+            return;
+        }
+
         CharSequence txt = node.getText();
         CharSequence dsc = node.getContentDescription();
         if (txt != null) extractData(txt.toString().replaceAll("[\t\n\r]", " "));
