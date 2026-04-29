@@ -110,8 +110,27 @@ public class GigUReaderService extends AccessibilityService {
         int eventWindowId = -1;
         if (eventRoot != null) {
             eventWindowId = eventRoot.getWindowId();
-            processWindowRoot(eventRoot, event.getEventType());
-            if (eventRoot != sourceRoot) eventRoot.recycle();
+            
+            // Atraso tático: Alguns apps (99/Uber) inflam a janela mas demoram ms para colocar o texto.
+            // Se processarmos instantâneo, pegamos 'vazio'.
+            final AccessibilityNodeInfo finalRoot = eventRoot;
+            final int finalType = event.getEventType();
+            final CharSequence finalPkg = event.getPackageName();
+            
+            if (finalPkg != null && (finalPkg.toString().contains("app99") || finalPkg.toString().contains("ubercab"))) {
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    try {
+                        processWindowRoot(finalRoot, finalType);
+                        if (finalRoot != sourceRoot) finalRoot.recycle();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Erro no delay: " + e.getMessage());
+                    }
+                }, 200);
+            } else {
+                processWindowRoot(eventRoot, event.getEventType());
+                if (eventRoot != sourceRoot) eventRoot.recycle();
+            }
+            
             sourceRoot.recycle();
         }
 
