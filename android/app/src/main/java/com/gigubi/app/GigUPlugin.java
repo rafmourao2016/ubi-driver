@@ -1,13 +1,18 @@
 package com.gigubi.app;
 
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
+import android.net.Uri;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
+import android.provider.Settings;
+import android.text.TextUtils;
 import android.util.Log;
+import android.view.accessibility.AccessibilityManager;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -39,9 +44,59 @@ public class GigUPlugin extends Plugin {
         this.fuelPrice = call.getDouble("fuelPrice", 5.80);
         this.fuelConsumption = call.getDouble("fuelConsumption", 10.0);
         this.platformFeePercent = call.getDouble("platformFee", 25.0) / 100.0;
-        
-        Log.d("GigUPlugin", "Configurações sincronizadas: Fuel=" + fuelPrice + ", Consumo=" + fuelConsumption);
+        Log.d("GigUPlugin", "Config: Fuel=" + fuelPrice + " Consumo=" + fuelConsumption);
         call.resolve();
+    }
+
+    /** Verifica se as duas permissões foram concedidas */
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        boolean hasOverlay      = Settings.canDrawOverlays(getContext());
+        boolean hasAccessibility = isAccessibilityServiceEnabled();
+        JSObject ret = new JSObject();
+        ret.put("overlayGranted", hasOverlay);
+        ret.put("accessibilityGranted", hasAccessibility);
+        call.resolve(ret);
+    }
+
+    /** Abre direto a tela de permissão 'Aparecer sobre outros apps' do Ubi */
+    @PluginMethod
+    public void openOverlayPermission(PluginCall call) {
+        Intent intent = new Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:" + getContext().getPackageName())
+        );
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
+
+    /** Abre direto as configurações de Acessibilidade do Android */
+    @PluginMethod
+    public void openAccessibilitySettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
+
+    /** Verifica se o GigUReaderService está ativo na Acessibilidade */
+    private boolean isAccessibilityServiceEnabled() {
+        try {
+            String prefString = Settings.Secure.getString(
+                getContext().getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            );
+            if (prefString == null || prefString.isEmpty()) return false;
+            String ourService = getContext().getPackageName() + "/" +
+                GigUReaderService.class.getName();
+            for (String entry : prefString.split(":")) {
+                if (entry.equalsIgnoreCase(ourService)) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public void emitOfferReceived(String rawText, double price, double km) {
