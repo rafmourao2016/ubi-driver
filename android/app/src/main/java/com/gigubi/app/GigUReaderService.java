@@ -205,6 +205,11 @@ public class GigUReaderService extends AccessibilityService {
             return;
         }
 
+        CharSequence pkg = root.getPackageName();
+        if (pkg != null) {
+            Log.d(TAG, "extractRideInfo chamado - pacote: " + pkg.toString());
+        }
+
         RideInfo info = extractRideInfo(root, fullText);
         if (info != null) {
             if (info.hasPrice && info.price > accumPrice) {
