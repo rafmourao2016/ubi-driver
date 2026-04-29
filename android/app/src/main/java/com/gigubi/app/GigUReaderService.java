@@ -37,18 +37,31 @@ public class GigUReaderService extends AccessibilityService {
 
     private final List<Double> eventKmList = new ArrayList<>();
 
+    // Rastreia pacotes já logados para não poluir o log (1 entrada por pacote por 5s)
+    private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) return;
 
         String pkg = event.getPackageName() != null ? event.getPackageName().toString() : "";
+        if (pkg.isEmpty()) return;
 
-        boolean isUber = pkg.contains("ubercab");
-        boolean is99   = pkg.equals("com.app99.driver")
-                      || pkg.contains("taxis99")
+        // ── Diagnóstico: loga TODOS os pacotes (1x por 5s) ──
+        long nowLog = System.currentTimeMillis();
+        Long lastLog = loggedPkgs.get(pkg);
+        if (lastLog == null || nowLog - lastLog > 5000) {
+            loggedPkgs.put(pkg, nowLog);
+            notifyDiag("[APP] " + pkg);
+            Log.d(TAG, "[PKG] " + pkg);
+        }
+
+        // ── Filtra só Uber e 99 (em código, não no XML) ──
+        boolean isUber = pkg.contains("uber");
+        boolean is99   = pkg.contains("99")
+                      || pkg.contains("taxis")
                       || pkg.contains("noventaenove")
-                      || pkg.contains("com.ninety9")
-                      || pkg.contains("99app");
+                      || pkg.contains("app99");
 
         if (!isUber && !is99) return;
 
@@ -56,6 +69,7 @@ public class GigUReaderService extends AccessibilityService {
         if (is99)   currentAppIsUber = false;
 
         Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
+        notifyDiag("[✓ UBER/99] " + pkg + " tipo:" + event.getEventType());
 
         long now = System.currentTimeMillis();
         if (now - firstEventTime > ACCUMULATION_WINDOW_MS) {
