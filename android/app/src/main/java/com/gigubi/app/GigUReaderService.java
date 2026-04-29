@@ -56,21 +56,23 @@ public class GigUReaderService extends AccessibilityService {
         Long lastLog = loggedPkgs.get(pkg);
         if (lastLog == null || nowLog - lastLog > 5000) {
             loggedPkgs.put(pkg, nowLog);
-            notifyDiag("[APP] " + pkg);
-            Log.d(TAG, "[PKG] " + pkg);
+            notifyDiag("[APP] " + pkg + " | tipo: " + event.getEventType());
+            Log.d(TAG, "[PKG_ALL] " + pkg + " | tipo: " + event.getEventType());
         }
 
-        // ── Filtra só Uber e 99 (em código, não no XML) ──
+        // ── Filtra Uber, 99 e SystemUI (onde overlays podem aparecer) ──
         boolean isUber = pkg.contains("uber");
         boolean is99   = pkg.contains("99")
                       || pkg.contains("taxis")
                       || pkg.contains("noventaenove")
                       || pkg.contains("app99");
+        boolean isSystemUI = pkg.contains("systemui");
 
-        if (!isUber && !is99) return;
+        if (!isUber && !is99 && !isSystemUI) return;
 
         if (isUber) currentAppIsUber = true;
         if (is99)   currentAppIsUber = false;
+        // se for systemUI, mantém a flag de qual app estava aberto antes
 
         Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
         notifyDiag("[✓ UBER/99] " + pkg + " tipo:" + event.getEventType());
