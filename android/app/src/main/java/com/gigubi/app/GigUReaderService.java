@@ -632,7 +632,14 @@ public class GigUReaderService extends AccessibilityService {
 
         Log.d(TAG, "Iniciando captura de tela para OCR...");
         
-        takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
+        Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
+            ? getMainExecutor() 
+            : new Executor() {
+                private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+                @Override public void execute(Runnable r) { handler.post(r); }
+            };
+
+        takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
             @Override
             public void onSuccess(ScreenshotResult screenshotResult) {
                 Bitmap bitmap = Bitmap.wrapHardwareBuffer(
