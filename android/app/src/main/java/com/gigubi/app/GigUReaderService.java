@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -39,8 +40,11 @@ public class GigUReaderService extends AccessibilityService {
     // Timer para limpar overlay quando motorista fica ocioso
     private Timer idleTimer = null;
 
-    // Lista temporária de km coletados em UM evento (para somar trecho de ida + corrida)
+    // Lista temporária de km coletados em UM ciclo de scan
     private final List<Double> eventKmList = new ArrayList<>();
+
+    // Flag para saber o app atual
+    private boolean currentAppIsUber = false;
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -49,12 +53,6 @@ public class GigUReaderService extends AccessibilityService {
         String packageName = event.getPackageName() != null
             ? event.getPackageName().toString() : "";
 
-        // === LOG DIAGNÓSTICO: mostra TODOS os pacotes no Logcat ===
-        // Use: adb logcat -s GigUReader para monitorar
-        // Depois de confirmar o pacote do 99, pode remover esta linha
-        Log.d(TAG, "[DIAGNÓSTICO] Pacote ativo: " + packageName);
-
-        // Aceita Uber Rider, Uber Driver e variantes do 99
         boolean isUber = packageName.contains("ubercab");
         boolean is99   = packageName.equals("com.app99.driver")
                       || packageName.contains("taxis99")
@@ -64,51 +62,78 @@ public class GigUReaderService extends AccessibilityService {
 
         if (!isUber && !is99) return;
 
-        Log.d(TAG, "Evento de: " + packageName + " | tipo: " + event.getEventType());
+        // Mantém flag do app atual para uso posterior
+        if (isUber) currentAppIsUber = true;
+        if (is99)   currentAppIsUber = false;
 
-        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-        if (rootNode == null) {
-            Log.w(TAG, "getRootInActiveWindow() retornou null");
-            return;
-        }
+        Log.d(TAG, "Evento: " + packageName + " | tipo: " + event.getEventType());
 
-        // Verifica se janela de acumulação expirou — se sim, reseta
+        // ============================================================
+        // ESTRATÉGIA DUAL: escaneia TODAS as janelas (fix Uber bottom sheet)
+        // A oferta da Uber aparece como uma janela dialog separada que
+        // getRootInActiveWindow() NÃO captura. getWindows() pega todas.
+        // ============================================================
         long now = System.currentTimeMillis();
         if (now - firstEventTime > ACCUMULATION_WINDOW_MS) {
-            Log.d(TAG, "[RESET] Nova janela de acumulação iniciada");
+            Log.d(TAG, "[RESET] Nova janela de acumulação");
             accumPrice = 0;
             accumKm = 0;
             firstEventTime = now;
         }
 
-        // Escaneia a árvore de nós para este evento
         eventKmList.clear();
-        processNode(rootNode);
-        rootNode.recycle();
 
-        // Soma TODOS os trechos de km encontrados na tela (ida ao passageiro + corrida)
-        // A regra de exigir >= 2 trechos é para evitar o "99 Abastece" da 99.
-        // A Uber não tem esse problema, e a árvore da Uber pode carregar os nós
-        // progressivamente, então para Uber aceitamos se tiver ao menos 1 km.
-        int minKmRequired = isUber ? 1 : 2;
+        // Tenta escanear todas as janelas na tela
+        boolean scannedAny = false;
+        try {
+            List<AccessibilityWindowInfo> windows = getWindows();
+            if (windows != null && !windows.isEmpty()) {
+                for (AccessibilityWindowInfo window : windows) {
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root != null) {
+                        processNode(root);
+                        root.recycle();
+                        scannedAny = true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getWindows() falhou: " + e.getMessage());
+        }
+
+        // Fallback: se não conseguiu nenhuma janela, usa o método antigo
+        if (!scannedAny) {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                processNode(rootNode);
+                rootNode.recycle();
+            } else {
+                Log.w(TAG, "Nenhuma janela acessível");
+                return;
+            }
+        }
+
+        // Decide quantos trechos de km exige:
+        // Uber: 1 (a oferta pode aparecer com 1 ou 2 trechos)
+        // 99:   2 (evita o painel "99 Abastece" que só tem 1 ou nenhum km)
+        int minKmRequired = currentAppIsUber ? 1 : 2;
 
         if (eventKmList.size() >= minKmRequired) {
             double eventTotalKm = 0;
             for (double km : eventKmList) eventTotalKm += km;
             if (eventTotalKm > accumKm) {
-                Log.d(TAG, "  -> Km total (soma de " + eventKmList.size() + " trechos): " + eventTotalKm + " km");
+                Log.d(TAG, "  -> Km total (" + eventKmList.size() + " trechos): " + eventTotalKm + " km");
                 accumKm = eventTotalKm;
             }
         } else if (!eventKmList.isEmpty()) {
-            Log.d(TAG, "  [IGNORADO] Só " + eventKmList.size() + " km na tela — provável tela home/idle");
+            Log.d(TAG, "  [IGNORADO] " + eventKmList.size() + " km na tela — aguardando mais trechos ou tela idle");
         }
 
-        Log.d(TAG, "Estado acumulado — Preço: " + accumPrice + " | Km total: " + accumKm);
+        Log.d(TAG, "Acumulado — Preço: R$" + accumPrice + " | Km: " + accumKm);
 
-        // Emite quando temos ambos os valores e o throttle permite
         if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
             emitOffer(accumPrice, accumKm);
-            resetIdleTimer(); // reinicia o contador de inatividade
+            resetIdleTimer();
         }
     }
 
@@ -122,7 +147,6 @@ public class GigUReaderService extends AccessibilityService {
                 Log.d(TAG, "[IDLE] 30s sem oferta — limpando overlay");
                 OverlayPlugin overlay = OverlayPlugin.getInstance();
                 if (overlay != null) overlay.clearOverlay();
-                // Reseta acumulador
                 accumPrice = 0;
                 accumKm = 0;
                 firstEventTime = 0;
@@ -137,13 +161,14 @@ public class GigUReaderService extends AccessibilityService {
         CharSequence descCS = node.getContentDescription();
 
         if (textCS != null) {
-            String clean = textCS.toString().replaceAll("[()\t\n\r]", " ");
-            Log.v(TAG, "  nó texto: " + clean);
+            // Mantém parênteses pois a Uber usa "(2.0 km)" — apenas limpa tabulações e quebras
+            String clean = textCS.toString().replaceAll("[\t\n\r]", " ");
+            Log.v(TAG, "  txt: " + clean);
             extractData(clean);
         }
         if (descCS != null) {
-            String clean = descCS.toString().replaceAll("[()\t\n\r]", " ");
-            Log.v(TAG, "  nó desc: " + clean);
+            String clean = descCS.toString().replaceAll("[\t\n\r]", " ");
+            Log.v(TAG, "  dsc: " + clean);
             extractData(clean);
         }
 
@@ -155,26 +180,26 @@ public class GigUReaderService extends AccessibilityService {
     }
 
     private void extractData(String text) {
+        // Captura preços: R$ 13,68 ou R$13.68
         Matcher priceMatcher = PRICE_PATTERN.matcher(text);
         while (priceMatcher.find()) {
             double p = parseDouble(priceMatcher.group(1));
-            // Ignora valores absurdos (< R$1 ou > R$500 provavelmente não são corrida)
+            // Faixa válida de corrida: R$1 até R$500
             if (p > 1 && p < 500 && p > accumPrice) {
-                Log.d(TAG, "  -> Preço capturado: R$" + p);
+                Log.d(TAG, "  -> Preço: R$" + p);
                 accumPrice = p;
             }
         }
 
-        // Coleta cada trecho de km separadamente na lista do evento
-        // (ida ao passageiro + distância da corrida = distância total rodada)
+        // Captura distâncias: "2.0 km", "1,9 km", "500 m", etc.
+        // IMPORTANTE: regex não remove parênteses para capturar "(2.0 km)"
         Matcher distMatcher = DISTANCE_PATTERN.matcher(text);
         while (distMatcher.find()) {
             double d = parseDouble(distMatcher.group(1));
             String unit = distMatcher.group(2).toLowerCase().trim();
             double kmValue = unit.equals("m") ? d / 1000.0 : d;
-            // Ignora distâncias absurdas (< 200m ou > 100km)
+            // Faixa válida: 200m até 100km
             if (kmValue > 0.2 && kmValue < 100) {
-                // Evita duplicatas exatas na mesma varredura
                 if (!eventKmList.contains(kmValue)) {
                     Log.d(TAG, "  -> Km parcial: " + kmValue + " km");
                     eventKmList.add(kmValue);
@@ -184,29 +209,27 @@ public class GigUReaderService extends AccessibilityService {
     }
 
     private void emitOffer(double price, double km) {
-        Log.i(TAG, ">>> OFERTA EMITIDA: R$" + price + " | " + km + " km");
+        Log.i(TAG, ">>> OFERTA: R$" + price + " | " + km + " km");
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin != null) {
             plugin.emitOfferReceived("Offer Detected", price, km);
             lastEmitTime = System.currentTimeMillis();
-            // Reseta acumulador após emitir
             accumPrice = 0;
             accumKm = 0;
             firstEventTime = 0;
         } else {
-            Log.e(TAG, "GigUPlugin.getInstance() é null — WebView pode estar em background!");
+            Log.e(TAG, "GigUPlugin null — WebView em background!");
         }
     }
 
     private double parseDouble(String value) {
         try {
             value = value.replace("\u00A0", "").trim();
-            // Se tiver vírgula, assume formato BR (ex: 1.234,56 ou 10,8)
             if (value.contains(",")) {
-                value = value.replace(".", "");  // remove separador de milhar
-                value = value.replace(",", "."); // converte vírgula decimal para ponto
+                // Formato BR: 1.234,56 → remove ponto de milhar, converte vírgula
+                value = value.replace(".", "").replace(",", ".");
             }
-            // Se não tiver vírgula (ex: 10.8), o Double.parseDouble já entende o ponto como decimal.
+            // Formato Uber: 2.0 → já está ok para parseDouble
             return Double.parseDouble(value);
         } catch (Exception e) {
             return 0;
@@ -221,6 +244,6 @@ public class GigUReaderService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        Log.i(TAG, "=== GigU Accessibility Service CONECTADO e PRONTO ===");
+        Log.i(TAG, "=== GigU Accessibility Service CONECTADO ===");
     }
 }
