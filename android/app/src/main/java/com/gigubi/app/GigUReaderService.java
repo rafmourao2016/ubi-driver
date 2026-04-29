@@ -277,7 +277,7 @@ public class GigUReaderService extends AccessibilityService {
         boolean found = false;
 
         // Exemplo: Uber Price
-        List<AccessibilityNodeInfo> priceNodes = root.findAccessibilityNodeInfosByViewId("com.ubercab:id/fare_amount");
+        List<AccessibilityNodeInfo> priceNodes = root.findAccessibilityNodeInfosByViewId("com.ubercab.driver:id/fare_amount");
         if (priceNodes != null) {
             if (!priceNodes.isEmpty()) {
                 AccessibilityNodeInfo node = priceNodes.get(0);
