@@ -304,24 +304,48 @@ public class GigUReaderService extends AccessibilityService {
             return;
         }
 
-        CharSequence txt = node.getText();
-        CharSequence dsc = node.getContentDescription();
-        
-        if (txt != null) {
-            sb.append(txt.toString().replaceAll("[\t\n\r]", " ")).append(" ");
+        if (node.getText() != null) {
+            sb.append(node.getText().toString()).append(" ");
         }
-        if (dsc != null) {
-            sb.append(dsc.toString().replaceAll("[\t\n\r]", " ")).append(" ");
+        if (node.getContentDescription() != null) {
+            sb.append(node.getContentDescription().toString()).append(" ");
+        }
+        
+        // Campos extras para layouts modernos (Android 8+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (node.getHintText() != null) {
+                sb.append(node.getHintText().toString()).append(" ");
+            }
+            if (node.getTooltipText() != null) {
+                sb.append(node.getTooltipText().toString()).append(" ");
+            }
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
-            extractAllText(child, sb);
-            if (child != null) child.recycle();
+            if (child != null) {
+                extractAllText(child, sb);
+                child.recycle();
+            }
         }
     }
 
     private RideInfo extractRideInfo(AccessibilityNodeInfo root, String fullText) {
+        // Se o fullText veio vazio mas sabemos que é um app de transporte, 
+        // tentamos uma busca direta por "R$" via sistema
+        if (fullText.isEmpty()) {
+            List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("R$");
+            if (nodes != null && !nodes.isEmpty()) {
+                StringBuilder recoverySb = new StringBuilder();
+                for (AccessibilityNodeInfo n : nodes) {
+                    if (n.getText() != null) recoverySb.append(n.getText()).append(" ");
+                    n.recycle();
+                }
+                fullText = recoverySb.toString();
+                Log.d(TAG, "Recuperação de texto via busca direta: " + fullText);
+            }
+        }
+
         RideInfo info = new RideInfo();
 
         // Camada 1: IDs Fixos (mais rápido, mais robusto, mas quebra se app atualizar id)
