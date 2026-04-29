@@ -230,13 +230,19 @@ public class GigUReaderService extends AccessibilityService {
 
         StringBuilder sb = new StringBuilder();
         extractAllText(root, sb);
-        String fullText = sb.toString();
+        String fullText = sb.toString().trim();
         
-        if (fullText.trim().isEmpty()) {
-            if (pkg != null) {
-                Log.d(TAG, "processWindowRoot abortado: fullText vazio (tipo " + eventType + ")");
-            }
+        if (fullText.isEmpty()) {
+            Log.d(TAG, "processWindowRoot abortado: [vazio] pkg=" + pkg + " class=" + root.getClassName() + " type=" + eventType);
             return;
+        }
+
+        // Diagnóstico especial: Se for SystemUI ou 99/Uber, vamos logar TUDO se tiver qualquer pista
+        String low = fullText.toLowerCase();
+        if (pkg != null && (pkg.toString().contains("systemui") || pkg.toString().contains("app99") || pkg.toString().contains("ubercab"))) {
+            if (low.contains("99") || low.contains("uber") || low.contains("r$") || low.contains("km")) {
+                Log.d(TAG, "INSPEÇÃO [" + pkg + "]: " + fullText);
+            }
         }
 
         // ── Guard de Conteúdo ──
