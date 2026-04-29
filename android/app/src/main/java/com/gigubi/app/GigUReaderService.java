@@ -85,7 +85,7 @@ public class GigUReaderService extends AccessibilityService {
         int eventWindowId = -1;
         if (eventRoot != null) {
             eventWindowId = eventRoot.getWindowId();
-            processNode(eventRoot);
+            processWindowRoot(eventRoot);
             eventRoot.recycle();
         }
 
@@ -94,7 +94,7 @@ public class GigUReaderService extends AccessibilityService {
             AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
             if (activeRoot != null) {
                 eventWindowId = activeRoot.getWindowId();
-                processNode(activeRoot);
+                processWindowRoot(activeRoot);
                 activeRoot.recycle();
             }
         }
@@ -110,7 +110,7 @@ public class GigUReaderService extends AccessibilityService {
                     if (window.getId() == eventWindowId) continue;
                     AccessibilityNodeInfo root = window.getRoot();
                     if (root == null) continue;
-                    processNode(root);
+                    processWindowRoot(root);
                     root.recycle();
                 }
             }
@@ -160,7 +160,23 @@ public class GigUReaderService extends AccessibilityService {
         }, IDLE_CLEAR_MS);
     }
 
-    private void processNode(AccessibilityNodeInfo node) {
+    private void processWindowRoot(AccessibilityNodeInfo root) {
+        if (root == null) return;
+        
+        StringBuilder sb = new StringBuilder();
+        extractAllText(root, sb);
+        String fullText = sb.toString();
+        
+        if (fullText.trim().isEmpty()) return;
+
+        String lower = fullText.toLowerCase();
+        // Se a janela contiver textos da NOSSA overlay, ignoramos a janela INTEIRA
+        if (!lower.contains("faltam") && !lower.contains("simulador") && !lower.contains("simular oferta")) {
+            extractData(fullText);
+        }
+    }
+
+    private void extractAllText(AccessibilityNodeInfo node, StringBuilder sb) {
         if (node == null) return;
 
         CharSequence pkg = node.getPackageName();
@@ -172,25 +188,15 @@ public class GigUReaderService extends AccessibilityService {
         CharSequence dsc = node.getContentDescription();
         
         if (txt != null) {
-            String s = txt.toString().replaceAll("[\t\n\r]", " ");
-            // Proteção extra: ignora textos do nosso próprio overlay caso o pacote venha vazio/diferente
-            String lower = s.toLowerCase();
-            if (!lower.contains("faltam") && !lower.contains("simulador") && !lower.contains("simular oferta")) {
-                extractData(s);
-            }
+            sb.append(txt.toString().replaceAll("[\t\n\r]", " ")).append(" ");
         }
-        
         if (dsc != null) {
-            String s = dsc.toString().replaceAll("[\t\n\r]", " ");
-            String lower = s.toLowerCase();
-            if (!lower.contains("faltam") && !lower.contains("simulador") && !lower.contains("simular oferta")) {
-                extractData(s);
-            }
+            sb.append(dsc.toString().replaceAll("[\t\n\r]", " ")).append(" ");
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
-            processNode(child);
+            extractAllText(child, sb);
             if (child != null) child.recycle();
         }
     }
