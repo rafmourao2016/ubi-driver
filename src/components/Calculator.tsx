@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { calculateProfit } from '../lib/calculations';
 import { useSync } from '../hooks/useSync';
 import PiPMode from './PiPMode';
@@ -16,8 +16,8 @@ export default function Calculator() {
     targetProfitPerKm: 2.00,
   });
 
-  const [dailyGoal, setDailyGoal] = React.useState(250);
-  const [dailyAccumulated, setDailyAccumulated] = React.useState(0);
+  const [dailyGoal, setDailyGoal] = useState(250);
+  const [dailyAccumulated, setDailyAccumulated] = useState(0);
 
   useEffect(() => {
     const savedGoal = localStorage.getItem('ubi_daily_goal');
@@ -40,7 +40,6 @@ export default function Calculator() {
           fuelConsumption: input.fuelConsumptionLabel,
           platformFee: input.platformFeePercent
         });
-
         const listener = giguPlugin.addListener('onUberOffer', (data: { price: number; km: number }) => {
           if (data.price > 0 || data.km > 0) {
             setInput(prev => ({
@@ -58,233 +57,223 @@ export default function Calculator() {
   const results = useMemo(() => calculateProfit(input), [input]);
 
   const grade = useMemo(() => {
-    if (results.profitMargin >= 30) return { label: 'ELITE ★', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]' };
-    if (results.profitMargin >= 15) return { label: 'OK ●', color: 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.2)]' };
-    return { label: 'BAIXO ▼', color: 'bg-red-500/20 text-red-400 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]' };
+    if (results.profitMargin >= 30) return { label: 'ELITE ★', bg: '#065f46', color: '#6ee7b7', border: '#059669' };
+    if (results.profitMargin >= 15) return { label: 'OK ●', bg: '#78350f', color: '#fcd34d', border: '#d97706' };
+    return { label: 'BAIXO ▼', bg: '#7f1d1d', color: '#fca5a5', border: '#dc2626' };
   }, [results.profitMargin]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const numericValue = value === '' ? 0 : parseFloat(value);
-    setInput(prev => ({ ...prev, [name]: numericValue }));
+    setInput(prev => ({ ...prev, [name]: value === '' ? 0 : parseFloat(value) }));
   };
 
   const handleConfirmRide = () => {
     setDailyAccumulated(prev => prev + results.netProfit);
-    // Vibrate success
-    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
   };
 
   const handleResetDay = () => {
-    if (confirm('Deseja começar um novo dia e zerar os ganhos? 🌅')) {
-      setDailyAccumulated(0);
-    }
+    if (confirm('Zerar os ganhos de hoje? 🌅')) setDailyAccumulated(0);
   };
 
   const syncDataWithDaily = async () => {
     const result = await syncData();
-    if (result.success) {
-      if (navigator.vibrate) navigator.vibrate(100);
-      alert('Tudo salvo na nuvem! ✨');
-    }
+    if (result.success && navigator.vibrate) navigator.vibrate(100);
   };
 
-  const formatCurrency = (val: number) => 
+  const f = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-  const dailyProgressPercent = Math.min((dailyAccumulated / dailyGoal) * 100, 100);
+  const pct = Math.min((dailyAccumulated / dailyGoal) * 100, 100);
 
   return (
-    <div className="animate-fade-in max-w-md mx-auto p-5 pb-32">
-      
-      {/* HEADER */}
-      <header className="mb-6 flex justify-between items-center bg-white/5 p-4 rounded-3xl border border-white/10 shadow-lg backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
-            <span className="text-white font-black text-xl tracking-tighter">U</span>
-          </div>
+    <div className="animate-fade-in" style={{ maxWidth: 480, margin: '0 auto', padding: '16px 16px 120px' }}>
+
+      {/* ── HEADER ── */}
+      <header style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 20, padding: '12px 16px', marginBottom: 14,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #c084fc, #7c3aed)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 900, fontSize: 18, color: '#fff',
+            boxShadow: '0 4px 14px rgba(192,132,252,0.35)',
+          }}>U</div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-white leading-none">Ubi Driver</h1>
-            <p className="text-primary text-[10px] font-bold uppercase tracking-widest mt-1">Smart Overlay</p>
+            <div style={{ fontWeight: 900, fontSize: '1rem', lineHeight: 1, color: '#fff' }}>Ubi Driver</div>
+            <div style={{ fontWeight: 700, fontSize: '0.65rem', color: '#c084fc', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 2 }}>Smart Overlay</div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleResetDay} className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full hover:bg-white/10 transition-all border border-white/5 active:scale-95" title="Zerar Dia">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          </button>
-        </div>
+        <button onClick={handleResetDay} style={{
+          width: 36, height: 36, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+          color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
       </header>
 
-      {/* DAILY GOAL PANEL */}
-      <section className="relative overflow-hidden mb-6 p-6 rounded-[32px] bg-gradient-to-br from-[#1A1A2E] to-[#121220] border border-white/5 shadow-2xl">
-        <div className="absolute top-0 right-0 p-4">
-          <div className="flex items-center bg-white/5 rounded-full px-3 py-1 border border-white/10">
-            <span className="text-[10px] text-text-muted mr-1 font-bold uppercase">Meta:</span>
-            <input 
-              type="number" 
-              className="bg-transparent text-right text-[11px] font-black text-white w-16 outline-none"
-              value={dailyGoal}
-              onChange={(e) => setDailyGoal(parseFloat(e.target.value) || 0)}
+      {/* ── DAILY GOAL ── */}
+      <section style={{
+        background: 'linear-gradient(135deg, #1a1033 0%, #0f0e1a 100%)',
+        border: '1px solid rgba(192,132,252,0.15)', borderRadius: 24, padding: 20, marginBottom: 14,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>🎯 Progresso de Hoje</div>
+            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>{f(dailyAccumulated)}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Meta</div>
+            <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '4px 10px' }}>
+              <span style={{ color: '#64748b', fontSize: '0.8rem', marginRight: 2 }}>R$</span>
+              <input type="number" value={dailyGoal} onChange={e => setDailyGoal(parseFloat(e.target.value) || 0)}
+                style={{ width: 56, fontSize: '0.9rem', fontWeight: 900, color: '#c084fc', textAlign: 'right' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ height: 10, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', position: 'relative', marginBottom: 8 }}>
+          <div style={{
+            height: '100%', width: `${pct}%`,
+            background: 'linear-gradient(90deg, #c084fc, #a855f7, #6366f1)',
+            borderRadius: 99, transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{
+              position: 'absolute', top: 0, left: '-30%', width: '30%', height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+              animation: 'shimmer 2s infinite',
+            }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>
+          <span style={{ color: '#c084fc' }}>{pct.toFixed(0)}% concluído</span>
+          <span>Faltam {f(Math.max(dailyGoal - dailyAccumulated, 0))}</span>
+        </div>
+      </section>
+
+      {/* ── PROFIT CARD ── */}
+      <section className="animate-float" style={{
+        background: 'linear-gradient(135deg, #c084fc 0%, #a855f7 40%, #fb923c 100%)',
+        borderRadius: 24, padding: 20, marginBottom: 14, position: 'relative', overflow: 'hidden',
+        boxShadow: '0 16px 40px -8px rgba(192,132,252,0.45)',
+      }}>
+        <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, background: 'rgba(255,255,255,0.12)', borderRadius: '50%', filter: 'blur(30px)' }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', animation: 'pulse-dot 2s infinite' }} />
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Lucro Líquido</span>
+            </div>
+            <div style={{
+              padding: '4px 10px', borderRadius: 99,
+              background: grade.bg, color: grade.color,
+              border: `1px solid ${grade.border}`,
+              fontSize: '0.65rem', fontWeight: 800, letterSpacing: '0.06em',
+            }}>
+              {grade.label}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 'clamp(2.2rem, 8vw, 3rem)', fontWeight: 900, color: '#fff', lineHeight: 1, marginBottom: 14, textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+            {f(results.netProfit)}
+          </div>
+
+          <button onClick={handleConfirmRide} className="btn-add" style={{ marginBottom: 14, color: '#fff' }}>
+            🚗 Somar na Meta do Dia
+          </button>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 14 }}>
+            <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 14, padding: '10px 14px' }}>
+              <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>R$ / Km</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff' }}>{f(results.profitPerKm)}</div>
+            </div>
+            <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 14, padding: '10px 14px' }}>
+              <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Bruto Alvo</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff' }}>{f(results.targetGrossPrice)}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── INPUT CARDS ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: '💰 Bruto (R$)', name: 'grossEarnings', placeholder: '0,00' },
+          { label: '📍 Distância (km)', name: 'distanceKm', placeholder: '0' },
+        ].map(f2 => (
+          <div key={f2.name} className="card" style={{ padding: '14px 16px' }}>
+            <label style={{ marginBottom: 6 }}>{f2.label}</label>
+            <input type="number" name={f2.name} placeholder={f2.placeholder}
+              value={(input as any)[f2.name] === 0 ? '' : (input as any)[f2.name]}
+              onChange={handleChange}
+              style={{ fontSize: '1.6rem' }}
             />
           </div>
-        </div>
-        
-        <div className="mb-4 mt-2">
-          <p className="text-[11px] font-bold text-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
-            <span>🎯</span> Progresso de Hoje
-          </p>
-          <div className="text-4xl font-black text-white tracking-tight">
-            {formatCurrency(dailyAccumulated)}
-          </div>
-        </div>
-        
-        <div className="h-4 bg-black/40 rounded-full overflow-hidden mb-3 border border-white/5 p-[2px]">
-          <div 
-            className="h-full bg-gradient-to-r from-primary via-purple-400 to-accent rounded-full transition-all duration-1000 relative overflow-hidden shadow-[0_0_10px_rgba(192,132,252,0.5)]" 
-            style={{ width: `${dailyProgressPercent}%` }}
-          >
-            <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
-          </div>
-        </div>
-        
-        <div className="flex justify-between text-[11px] font-bold text-text-muted">
-          <span className="text-primary">{dailyProgressPercent.toFixed(0)}%</span>
-          <span>Faltam {formatCurrency(Math.max(dailyGoal - dailyAccumulated, 0))}</span>
-        </div>
-      </section>
-
-      {/* LIVE PROFIT CARD */}
-      <section className="relative overflow-hidden mb-6 p-6 rounded-[32px] bg-gradient-to-br from-primary to-orange-400 shadow-[0_15px_35px_-10px_rgba(192,132,252,0.5)] animate-float border border-white/20">
-        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
-        <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-black/10 rounded-full blur-2xl"></div>
-        
-        <div className="relative z-10 flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_white]"></span>
-            <label className="text-black/60 font-black text-[10px] uppercase tracking-widest">Lucro Líquido</label>
-          </div>
-          <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest backdrop-blur-md ${grade.color.replace('text-green-400', 'text-white').replace('text-amber-400', 'text-white').replace('text-red-400', 'text-white')} bg-black/20 border-white/20`}>
-            {grade.label}
-          </div>
-        </div>
-
-        <div className="relative z-10 text-6xl font-black text-white tracking-tighter mb-5 drop-shadow-md">
-          {formatCurrency(results.netProfit)}
-        </div>
-
-        <button 
-          onClick={handleConfirmRide}
-          className="relative z-10 w-full py-3 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-2xl mb-5 text-[11px] font-black uppercase tracking-widest text-white border border-white/30 transition-all active:scale-95 shadow-lg flex justify-center items-center gap-2"
-        >
-          <span>🚗</span> Somar na Meta
-        </button>
-
-        <div className="relative z-10 flex gap-4 border-t border-black/10 pt-4">
-          <div className="flex-1 bg-black/10 rounded-2xl p-3 border border-white/10 backdrop-blur-sm">
-            <span className="block text-[9px] text-black/50 font-black uppercase tracking-widest mb-1">R$ / Km</span>
-            <span className="text-white font-black text-xl">{formatCurrency(results.profitPerKm)}</span>
-          </div>
-          <div className="flex-1 bg-black/10 rounded-2xl p-3 border border-white/10 backdrop-blur-sm">
-            <span className="block text-[9px] text-black/50 font-black uppercase tracking-widest mb-1">Bruto Alvo</span>
-            <span className="text-white font-black text-xl">{formatCurrency(results.targetGrossPrice)}</span>
-          </div>
-        </div>
-      </section>
-
-      {/* INPUTS SIMULADOR */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-[#1A1A2E] p-4 rounded-3xl border border-white/5 focus-within:border-primary/50 focus-within:bg-[#1f1f38] transition-all">
-          <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest mb-2 flex gap-1"><span>💰</span> Bruto</label>
-          <input 
-            type="number" 
-            name="grossEarnings" 
-            value={input.grossEarnings === 0 ? '' : input.grossEarnings} 
-            onChange={handleChange} 
-            placeholder="0,00"
-            className="w-full bg-transparent text-white font-black text-2xl outline-none placeholder:text-white/20"
-          />
-        </div>
-        <div className="bg-[#1A1A2E] p-4 rounded-3xl border border-white/5 focus-within:border-primary/50 focus-within:bg-[#1f1f38] transition-all">
-          <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest mb-2 flex gap-1"><span>📍</span> Distância</label>
-          <input 
-            type="number" 
-            name="distanceKm" 
-            value={input.distanceKm === 0 ? '' : input.distanceKm} 
-            onChange={handleChange} 
-            placeholder="0"
-            className="w-full bg-transparent text-white font-black text-2xl outline-none placeholder:text-white/20"
-          />
-        </div>
+        ))}
       </div>
 
-      {/* CONFIGURAÇÕES (Sanfoninha fofa) */}
-      <section className="bg-white/5 rounded-[32px] p-1 border border-white/5">
-        <div className="p-4 flex items-center justify-center gap-2">
-          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-white/10"></div>
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest flex items-center gap-1"><span>⚙️</span> Ajustes Finos</span>
-          <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-white/10"></div>
+      {/* ── SETTINGS ── */}
+      <section className="card" style={{ padding: '18px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+          <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>⚙️ Ajustes Finos</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
         </div>
 
-        <div className="p-4 space-y-4">
-          <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-            <label className="flex justify-between text-[11px] font-bold text-text-muted uppercase tracking-widest mb-3">
-              <span>Alvo de Lucro (km)</span>
-              <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-full">{formatCurrency(input.targetProfitPerKm)}</span>
-            </label>
-            <input 
-              type="range" 
-              name="targetProfitPerKm" 
-              min="0.5" max="5" step="0.1"
-              value={input.targetProfitPerKm} 
-              onChange={(e) => setInput(prev => ({ ...prev, targetProfitPerKm: parseFloat(e.target.value) }))}
-              className="w-full accent-primary h-2 bg-black/50 rounded-lg appearance-none cursor-pointer"
-            />
+        {/* Alvo slider */}
+        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 16, padding: '14px 16px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <label style={{ margin: 0 }}>Alvo de Lucro (km)</label>
+            <span style={{ fontSize: '0.8rem', fontWeight: 900, color: '#c084fc', background: 'rgba(192,132,252,0.1)', padding: '2px 8px', borderRadius: 99 }}>
+              {f(input.targetProfitPerKm)}
+            </span>
           </div>
+          <input type="range" min="0.5" max="5" step="0.1"
+            value={input.targetProfitPerKm}
+            onChange={e => setInput(prev => ({ ...prev, targetProfitPerKm: parseFloat(e.target.value) }))}
+          />
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-black/20 p-3 rounded-2xl border border-white/5">
-              <label className="text-[9px] text-text-muted font-bold uppercase mb-1 block">⛽ Gasolina (R$)</label>
-              <input type="number" name="fuelPrice" value={input.fuelPrice === 0 ? '' : input.fuelPrice} onChange={handleChange} step="0.01" className="w-full bg-transparent text-white font-bold text-lg outline-none"/>
+        {/* Grid 2x2 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {[
+            { label: '⛽ Gasolina (R$)', name: 'fuelPrice', step: '0.01' },
+            { label: '🚗 Consumo (km/l)', name: 'fuelConsumptionLabel', step: '0.5' },
+            { label: '📊 Taxa App (%)', name: 'platformFeePercent', step: '1' },
+            { label: '🍟 Extras (R$)', name: 'otherCosts', step: '1', placeholder: '0' },
+          ].map(f3 => (
+            <div key={f3.name} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: '12px 14px' }}>
+              <label style={{ marginBottom: 4 }}>{f3.label}</label>
+              <input type="number" name={f3.name} step={f3.step} placeholder={f3.placeholder}
+                value={(input as any)[f3.name] === 0 ? '' : (input as any)[f3.name]}
+                onChange={handleChange}
+                style={{ fontSize: '1.2rem' }}
+              />
             </div>
-            <div className="bg-black/20 p-3 rounded-2xl border border-white/5">
-              <label className="text-[9px] text-text-muted font-bold uppercase mb-1 block">🚗 Consumo (km/l)</label>
-              <input type="number" name="fuelConsumptionLabel" value={input.fuelConsumptionLabel === 0 ? '' : input.fuelConsumptionLabel} onChange={handleChange} className="w-full bg-transparent text-white font-bold text-lg outline-none"/>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-black/20 p-3 rounded-2xl border border-white/5">
-              <label className="text-[9px] text-text-muted font-bold uppercase mb-1 block">📊 Taxa App (%)</label>
-              <input type="number" name="platformFeePercent" value={input.platformFeePercent === 0 ? '' : input.platformFeePercent} onChange={handleChange} className="w-full bg-transparent text-white font-bold text-lg outline-none"/>
-            </div>
-            <div className="bg-black/20 p-3 rounded-2xl border border-white/5">
-              <label className="text-[9px] text-text-muted font-bold uppercase mb-1 block">🍟 Extras (R$)</label>
-              <input type="number" name="otherCosts" value={input.otherCosts === 0 ? '' : input.otherCosts} onChange={handleChange} className="w-full bg-transparent text-white font-bold text-lg outline-none placeholder:text-white/20" placeholder="0"/>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      <button 
-        className={`w-full mt-6 py-4 rounded-[24px] font-black text-sm uppercase tracking-widest text-white bg-gradient-to-r from-primary to-purple-600 shadow-[0_10px_20px_-5px_rgba(192,132,252,0.4)] transition-all active:scale-95 ${loading ? 'opacity-50' : 'hover:-translate-y-1'}`}
-        disabled={loading}
-        onClick={syncDataWithDaily}
-      >
+      {/* ── SAVE BUTTON ── */}
+      <button onClick={syncDataWithDaily} disabled={loading} className="btn-primary"
+        style={{ marginTop: 16, opacity: loading ? 0.6 : 1 }}>
         {loading ? 'Sincronizando...' : '☁️ Salvar na Nuvem'}
       </button>
 
       {lastSynced && (
-        <p className="mt-4 text-center text-[9px] text-white/30 font-bold uppercase tracking-widest">
-          Sincronizado: {lastSynced.toLocaleTimeString()}
+        <p style={{ textAlign: 'center', fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 10 }}>
+          Sync: {lastSynced.toLocaleTimeString()}
         </p>
       )}
 
-      {/* PIP MODE BUTTON FLOATS OVER EVERYTHING */}
-      <PiPMode
-        netProfit={results.netProfit}
-        margin={results.profitMargin}
-        profitPerKm={results.profitPerKm}
-      />
+      <PiPMode netProfit={results.netProfit} margin={results.profitMargin} profitPerKm={results.profitPerKm} />
     </div>
   );
 }
