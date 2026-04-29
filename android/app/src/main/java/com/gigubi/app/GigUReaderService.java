@@ -66,36 +66,25 @@ public class GigUReaderService extends AccessibilityService {
 
         eventKmList.clear();
 
-        // ─── Estratégia robusta: SEMPRE escaneia a janela ativa
-        // E TAMBÉM todas as janelas extras (pega bottom sheets da Uber)
-        // Os dois juntos garantem cobertura total sem depender de um só método.
-
-        // 1) Janela ativa (funciona para 99 e tela principal da Uber)
+        // ── Estratégia: SEMPRE escaneia janela ativa + janelas extras ──
+        // Salva o ID ANTES de reciclar o nó (evita crash por acesso a nó reciclado)
+        int activeWindowId = -1;
         AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
         if (activeRoot != null) {
+            activeWindowId = activeRoot.getWindowId(); // salva ID antes de reciclar!
             processNode(activeRoot);
             activeRoot.recycle();
         }
 
-        // 2) Demais janelas na tela (bottom sheet de oferta da Uber)
+        // Janelas extras (bottom sheet Uber, dialogs, etc.)
         try {
             List<AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
                 for (AccessibilityWindowInfo window : windows) {
-                    // Pula janelas de sistema (teclado, barra de status, etc.)
-                    int type = window.getType();
-                    if (type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
-
+                    if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
+                    if (window.getId() == activeWindowId) continue; // já escaneou
                     AccessibilityNodeInfo root = window.getRoot();
                     if (root == null) continue;
-
-                    // Evita re-escanear a mesma janela já lida por getRootInActiveWindow
-                    // comparando o ID da janela
-                    if (activeRoot != null && window.getId() == activeRoot.getWindowId()) {
-                        root.recycle();
-                        continue;
-                    }
-
                     processNode(root);
                     root.recycle();
                 }
@@ -103,6 +92,7 @@ public class GigUReaderService extends AccessibilityService {
         } catch (Exception e) {
             Log.w(TAG, "getWindows() erro: " + e.getMessage());
         }
+
 
         // Regra anti-falso-positivo:
         // Uber: 1+ km (oferta pode ter só 1 trecho visível)
