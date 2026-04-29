@@ -67,7 +67,7 @@ public class GigUPlugin extends Plugin {
         double price = call.getDouble("price", 18.50);
         double km    = call.getDouble("km", 7.2);
         Log.i("GigUPlugin", "[SIMULAÇÃO] Disparando oferta fake: R$" + price + " | " + km + " km");
-        emitOfferReceived("SIMULAÇÃO", price, km);
+        emitOfferReceived("SIMULAÇÃO", price, km, 0.0, 1.0);
         call.resolve();
     }
 
