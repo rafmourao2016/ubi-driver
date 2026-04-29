@@ -257,18 +257,21 @@ public class GigUReaderService extends AccessibilityService {
             info.layerUsed = "Camada 1: ViewId";
             return info;
         }
+        Log.d(TAG, "Camada 1 falhou");
 
         // Camada 2: Nós Âncora (busca por texto e vai nos "irmãos/filhos")
         if (extractByAnchor(root, info)) {
             info.layerUsed = "Camada 2: Anchor";
             return info;
         }
+        Log.d(TAG, "Camada 2 falhou");
 
         // Camada 3: Regex na String Gigante (como funcionava antes)
         if (extractByRegex(fullText, info)) {
             info.layerUsed = "Camada 3: Regex";
             return info;
         }
+        Log.d(TAG, "Camada 3 falhou — texto concatenado: " + fullText);
 
         return null;
     }
