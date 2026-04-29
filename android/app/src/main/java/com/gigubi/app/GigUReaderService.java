@@ -342,26 +342,29 @@ public class GigUReaderService extends AccessibilityService {
     private void extractAllText(AccessibilityNodeInfo node, StringBuilder sb) {
         if (node == null) return;
 
-        CharSequence pkg = node.getPackageName();
-        if (pkg != null && pkg.toString().contains("com.gigubi.app")) {
-            return;
+        CharSequence className = node.getClassName();
+        CharSequence text = node.getText();
+        CharSequence desc = node.getContentDescription();
+        
+        // Diagnóstico profundo para 99/Uber
+        CharSequence nodePkg = node.getPackageName();
+        if (nodePkg != null && (nodePkg.toString().contains("app99") || nodePkg.toString().contains("ubercab"))) {
+            Log.d(TAG, "[TREE] " + className + " | Text: " + text + " | Desc: " + desc + " | Children: " + node.getChildCount());
         }
 
-        if (node.getText() != null) {
-            sb.append(node.getText().toString()).append(" ");
+        if (text != null && text.length() > 0) {
+            sb.append(text.toString()).append(" ");
         }
-        if (node.getContentDescription() != null) {
-            sb.append(node.getContentDescription().toString()).append(" ");
+        if (desc != null && desc.length() > 0) {
+            sb.append(desc.toString()).append(" ");
         }
         
         // Campos extras para layouts modernos (Android 8+)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (node.getHintText() != null) {
-                sb.append(node.getHintText().toString()).append(" ");
-            }
-            if (node.getTooltipText() != null) {
-                sb.append(node.getTooltipText().toString()).append(" ");
-            }
+            CharSequence hint = node.getHintText();
+            if (hint != null && hint.length() > 0) sb.append(hint.toString()).append(" ");
+            CharSequence tool = node.getTooltipText();
+            if (tool != null && tool.length() > 0) sb.append(tool.toString()).append(" ");
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
