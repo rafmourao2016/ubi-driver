@@ -123,12 +123,14 @@ public class GigUPlugin extends Plugin {
         }
     }
 
-    public void emitOfferReceived(String rawText, double price, double km) {
+    public void emitOfferReceived(String rawText, double price, double km, double timeMin, double surge) {
         // Emite para a camada JS
         JSObject ret = new JSObject();
         ret.put("rawText", rawText);
         ret.put("price", price);
         ret.put("km", km);
+        ret.put("timeMin", timeMin);
+        ret.put("surge", surge);
         notifyListeners("onUberOffer", ret);
 
         // Calcula lucro no lado nativo
@@ -140,8 +142,8 @@ public class GigUPlugin extends Plugin {
 
         // Emite log de diagnóstico para o UI
         JSObject logEvt = new JSObject();
-        logEvt.put("msg", String.format("[OFERTA] R$%.2f | %.1fkm | Lucro: R$%.2f (%.0f%%)",
-            price, km, netProfit, margin));
+        logEvt.put("msg", String.format("[OFERTA] R$%.2f | %.1fkm | %.1fmin | Surge %.1fx | Lucro: R$%.2f (%.0f%%)",
+            price, km, timeMin, surge, netProfit, margin));
         notifyListeners("onDiagLog", logEvt);
 
         // Atualiza overlay nativo

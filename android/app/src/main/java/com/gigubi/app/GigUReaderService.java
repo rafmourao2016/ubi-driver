@@ -30,12 +30,15 @@ public class GigUReaderService extends AccessibilityService {
 
     private double accumPrice = 0;
     private double accumKm   = 0;
+    private double accumTimeMin = 0;
+    private double accumSurge = 1.0;
     private long firstEventTime = 0;
     private long lastEmitTime   = 0;
     private Timer idleTimer = null;
     private boolean currentAppIsUber = false;
 
     private final List<Double> eventKmList = new ArrayList<>();
+    private final List<Double> eventTimeList = new ArrayList<>();
 
     // Rastreia pacotes já logados para não poluir o log (1 entrada por pacote por 5s)
     private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
@@ -75,10 +78,13 @@ public class GigUReaderService extends AccessibilityService {
         if (now - firstEventTime > ACCUMULATION_WINDOW_MS) {
             accumPrice = 0;
             accumKm = 0;
+            accumTimeMin = 0;
+            accumSurge = 1.0;
             firstEventTime = now;
         }
 
         eventKmList.clear();
+        eventTimeList.clear();
 
         // ── 1) Janela do evento (via source node → raiz) ──
         AccessibilityNodeInfo eventRoot = getEventRoot(event);
@@ -129,11 +135,17 @@ public class GigUReaderService extends AccessibilityService {
         int minKm = currentAppIsUber ? 1 : 2;
 
         if (eventKmList.size() >= minKm) {
-            double total = 0;
-            for (double k : eventKmList) total += k;
-            if (total > accumKm) {
-                Log.d(TAG, "  -> Km total: " + total + " (" + eventKmList.size() + " trechos)");
-                accumKm = total;
+            double totalKm = 0;
+            for (double k : eventKmList) totalKm += k;
+            if (totalKm > accumKm) {
+                Log.d(TAG, "  -> Km total: " + totalKm + " (" + eventKmList.size() + " trechos)");
+                accumKm = totalKm;
+            }
+            
+            double totalTime = 0;
+            for (double t : eventTimeList) totalTime += t;
+            if (totalTime > accumTimeMin) {
+                accumTimeMin = totalTime;
             }
         } else if (!eventKmList.isEmpty()) {
             Log.d(TAG, "  [AGUARDANDO] " + eventKmList.size() + " km — esperando mais trechos");
@@ -142,7 +154,7 @@ public class GigUReaderService extends AccessibilityService {
         Log.d(TAG, "Acumulado: R$" + accumPrice + " | " + accumKm + " km");
 
         if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
-            emitOffer(accumPrice, accumKm);
+            emitOffer(accumPrice, accumKm, accumTimeMin, accumSurge);
             resetIdleTimer();
         }
     }
@@ -160,6 +172,16 @@ public class GigUReaderService extends AccessibilityService {
         }, IDLE_CLEAR_MS);
     }
 
+    public static class RideInfo {
+        public double price = 0.0;
+        public double distanceKm = 0.0;
+        public double timeMin = 0.0;
+        public double surgeMultiplier = 1.0;
+        public String layerUsed = "";
+        public boolean hasPrice = false;
+        public boolean hasKm = false;
+    }
+
     private void processWindowRoot(AccessibilityNodeInfo root) {
         if (root == null) return;
         
@@ -171,8 +193,26 @@ public class GigUReaderService extends AccessibilityService {
 
         String lower = fullText.toLowerCase();
         // Se a janela contiver textos da NOSSA overlay, ignoramos a janela INTEIRA
-        if (!lower.contains("faltam") && !lower.contains("simulador") && !lower.contains("simular oferta")) {
-            extractData(fullText);
+        if (lower.contains("faltam") || lower.contains("simulador") || lower.contains("simular oferta")) {
+            return;
+        }
+
+        RideInfo info = extractRideInfo(root, fullText);
+        if (info != null) {
+            if (info.hasPrice && info.price > accumPrice) {
+                accumPrice = info.price;
+                Log.d(TAG, "  -> Preço: R$" + info.price + " [" + info.layerUsed + "]");
+            }
+            if (info.hasKm && info.distanceKm > 0.2 && !eventKmList.contains(info.distanceKm)) {
+                eventKmList.add(info.distanceKm);
+                Log.d(TAG, "  -> Km parcial: " + info.distanceKm + " [" + info.layerUsed + "]");
+            }
+            if (info.timeMin > 0 && !eventTimeList.contains(info.timeMin)) {
+                eventTimeList.add(info.timeMin);
+            }
+            if (info.surgeMultiplier > 1.0 && info.surgeMultiplier > accumSurge) {
+                accumSurge = info.surgeMultiplier;
+            }
         }
     }
 
@@ -201,34 +241,140 @@ public class GigUReaderService extends AccessibilityService {
         }
     }
 
-    private void extractData(String text) {
-        Matcher pm = PRICE_PATTERN.matcher(text);
-        while (pm.find()) {
-            double p = parseDouble(pm.group(1));
-            if (p > 1 && p < 500 && p > accumPrice) {
-                Log.d(TAG, "  -> Preço: R$" + p + " (texto: '" + text + "')");
-                accumPrice = p;
+    private RideInfo extractRideInfo(AccessibilityNodeInfo root, String fullText) {
+        RideInfo info = new RideInfo();
+
+        // Camada 1: IDs Fixos (mais rápido, mais robusto, mas quebra se app atualizar id)
+        if (extractByViewId(root, info)) {
+            info.layerUsed = "Camada 1: ViewId";
+            return info;
+        }
+
+        // Camada 2: Nós Âncora (busca por texto e vai nos "irmãos/filhos")
+        if (extractByAnchor(root, info)) {
+            info.layerUsed = "Camada 2: Anchor";
+            return info;
+        }
+
+        // Camada 3: Regex na String Gigante (como funcionava antes)
+        if (extractByRegex(fullText, info)) {
+            info.layerUsed = "Camada 3: Regex";
+            return info;
+        }
+
+        return null;
+    }
+
+    private boolean extractByViewId(AccessibilityNodeInfo root, RideInfo info) {
+        boolean found = false;
+
+        // Exemplo: Uber Price
+        List<AccessibilityNodeInfo> priceNodes = root.findAccessibilityNodeInfosByViewId("com.ubercab:id/fare_amount");
+        if (priceNodes != null && !priceNodes.isEmpty()) {
+            AccessibilityNodeInfo node = priceNodes.get(0);
+            if (node.getText() != null) {
+                Matcher m = PRICE_PATTERN.matcher(node.getText().toString());
+                if (m.find()) {
+                    info.price = parseDouble(m.group(1));
+                    info.hasPrice = true;
+                    found = true;
+                }
             }
         }
-        Matcher dm = DISTANCE_PATTERN.matcher(text);
+
+        // TODO: Mapear IDs para distance, time, surge (Uber/99)
+        // Se encontrarmos, preenchemos info e retornamos true.
+        // Se não encontrarmos pelo menos o preço, retornamos false para cair na Camada 2.
+
+        return found && info.hasPrice;
+    }
+
+    private boolean extractByAnchor(AccessibilityNodeInfo root, RideInfo info) {
+        boolean found = false;
+
+        // Exemplo: Buscar âncora "Pagamento no app"
+        List<AccessibilityNodeInfo> anchorNodes = root.findAccessibilityNodeInfosByText("Pagamento no app");
+        if (anchorNodes != null && !anchorNodes.isEmpty()) {
+            AccessibilityNodeInfo anchor = anchorNodes.get(0);
+            AccessibilityNodeInfo parent = anchor.getParent();
+            if (parent != null) {
+                // Navegar pelos filhos do pai da âncora para procurar preço e distância
+                for (int i = 0; i < parent.getChildCount(); i++) {
+                    AccessibilityNodeInfo sibling = parent.getChild(i);
+                    if (sibling != null && sibling.getText() != null) {
+                        String txt = sibling.getText().toString();
+                        
+                        // Tenta extrair preço do irmão
+                        Matcher pm = PRICE_PATTERN.matcher(txt);
+                        if (pm.find()) {
+                            info.price = parseDouble(pm.group(1));
+                            info.hasPrice = true;
+                            found = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Retorna true somente se encontrou dados vitais usando a âncora
+        return found && info.hasPrice;
+    }
+
+    private boolean extractByRegex(String fullText, RideInfo info) {
+        boolean found = false;
+        
+        Matcher pm = PRICE_PATTERN.matcher(fullText);
+        while (pm.find()) {
+            double p = parseDouble(pm.group(1));
+            if (p > 1 && p < 500) {
+                if (p > info.price) info.price = p;
+                info.hasPrice = true;
+                found = true;
+            }
+        }
+        
+        Matcher dm = DISTANCE_PATTERN.matcher(fullText);
         while (dm.find()) {
             double d = parseDouble(dm.group(1));
             String unit = dm.group(2).toLowerCase().trim();
             double km = unit.equals("m") ? d / 1000.0 : d;
-            if (km > 0.2 && km < 100 && !eventKmList.contains(km)) {
-                Log.d(TAG, "  -> Km parcial: " + km + " (texto: '" + text + "')");
-                eventKmList.add(km);
+            if (km > 0.2 && km < 100) {
+                info.distanceKm = km;
+                info.hasKm = true;
+                found = true;
             }
         }
+        
+        // Exemplo: 9min
+        Matcher tm = Pattern.compile("(\\d+)\\s*(?:min)").matcher(fullText);
+        while (tm.find()) {
+            double t = parseDouble(tm.group(1));
+            if (t > 0 && t < 200) {
+                info.timeMin = t;
+                found = true;
+            }
+        }
+        
+        // Exemplo: 1,1x
+        Matcher sm = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*[xX]").matcher(fullText);
+        while (sm.find()) {
+            double s = parseDouble(sm.group(1));
+            if (s > 1.0 && s <= 5.0) {
+                info.surgeMultiplier = s;
+                found = true;
+            }
+        }
+
+        return found;
     }
 
-    private void emitOffer(double price, double km) {
-        Log.i(TAG, ">>> EMITINDO: R$" + price + " | " + km + " km");
+    private void emitOffer(double price, double km, double timeMin, double surge) {
+        Log.i(TAG, ">>> EMITINDO: R$" + price + " | " + km + " km | " + timeMin + " min | Surge " + surge + "x");
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin != null) {
-            plugin.emitOfferReceived("Offer", price, km);
+            plugin.emitOfferReceived("Offer", price, km, timeMin, surge);
             lastEmitTime = System.currentTimeMillis();
-            accumPrice = 0; accumKm = 0; firstEventTime = 0;
+            accumPrice = 0; accumKm = 0; accumTimeMin = 0; accumSurge = 1.0; firstEventTime = 0;
         } else {
             Log.e(TAG, "GigUPlugin null!");
             notifyDiag("[LEITOR] GigUPlugin null — WebView em background?");

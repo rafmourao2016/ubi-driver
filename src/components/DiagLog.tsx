@@ -26,10 +26,10 @@ export default function DiagLog() {
     });
 
     // Também captura onUberOffer para mostrar o que o serviço detectou
-    const rideListener = plugin.addListener('onUberOffer', (data: { price: number; km: number }) => {
+    const rideListener = plugin.addListener('onUberOffer', (data: { price: number; km: number; timeMin?: number; surge?: number }) => {
       setLogs(prev => [
         ...prev.slice(-49),
-        { time: now(), msg: `📡 onUberOffer recebido: R$${data.price?.toFixed(2)} | ${data.km?.toFixed(1)} km` }
+        { time: now(), msg: `📡 onUberOffer recebido: R$${data.price?.toFixed(2)} | ${data.km?.toFixed(1)} km | ${data.timeMin || 0} min | ${data.surge || 1}x` }
       ]);
     });
 
