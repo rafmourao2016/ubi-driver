@@ -201,15 +201,8 @@ public class GigUReaderService extends AccessibilityService {
         if (root == null) return;
         
         CharSequence pkg = root.getPackageName();
-        String pkgStr = pkg != null ? pkg.toString() : "";
-
-        // Só processa janelas que pertençam explicitamente à Uber ou 99
-        boolean isUber = pkgStr.contains("ubercab");
-        boolean is99   = pkgStr.contains("app99") || pkgStr.contains("taxis") || pkgStr.contains("noventaenove");
-        if (!isUber && !is99) return;
-
         if (pkg != null) {
-            Log.d(TAG, "processWindowRoot INICIO - pacote: " + pkgStr + " | tipo: " + eventType);
+            Log.d(TAG, "processWindowRoot INICIO - pacote: " + pkg.toString() + " | tipo: " + eventType);
         }
 
         StringBuilder sb = new StringBuilder();
