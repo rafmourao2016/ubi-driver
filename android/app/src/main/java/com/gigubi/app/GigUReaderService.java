@@ -80,23 +80,23 @@ public class GigUReaderService extends AccessibilityService {
 
         eventKmList.clear();
 
-        // ── Estratégia: SEMPRE escaneia janela ativa + janelas extras ──
-        // Salva o ID ANTES de reciclar o nó (evita crash por acesso a nó reciclado)
-        int activeWindowId = -1;
-        AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
-        if (activeRoot != null) {
-            activeWindowId = activeRoot.getWindowId(); // salva ID antes de reciclar!
-            processNode(activeRoot);
-            activeRoot.recycle();
+        // ── Estratégia principal: escaneia a raiz do nó que gerou o evento ──
+        // event.getSource() → raiz da janela EXATA que disparou o evento (mais confiável)
+        AccessibilityNodeInfo eventRoot = getEventRoot(event);
+        int eventWindowId = -1;
+        if (eventRoot != null) {
+            eventWindowId = eventRoot.getWindowId();
+            processNode(eventRoot);
+            eventRoot.recycle();
         }
 
-        // Janelas extras (bottom sheet Uber, dialogs, etc.)
+        // ── Complemento: demais janelas (bottom sheet Uber, dialogs) ──
         try {
             List<AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
                 for (AccessibilityWindowInfo window : windows) {
                     if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
-                    if (window.getId() == activeWindowId) continue; // já escaneou
+                    if (window.getId() == eventWindowId) continue; // já escaneou
                     AccessibilityNodeInfo root = window.getRoot();
                     if (root == null) continue;
                     processNode(root);
@@ -105,6 +105,10 @@ public class GigUReaderService extends AccessibilityService {
             }
         } catch (Exception e) {
             Log.w(TAG, "getWindows() erro: " + e.getMessage());
+        }
+
+        if (!eventKmList.isEmpty() || accumPrice > 0) {
+            notifyDiag("[SCAN] preço=" + accumPrice + " kms=" + eventKmList);
         }
 
 
@@ -197,6 +201,29 @@ public class GigUReaderService extends AccessibilityService {
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin == null) return;
         plugin.sendDiagLog(msg);
+    }
+
+    /**
+     * Navega de event.getSource() até a raiz da árvore de acessibilidade.
+     * Mais confiável que getRootInActiveWindow() para janelas flutuantes (Uber bottom sheet).
+     */
+    private AccessibilityNodeInfo getEventRoot(AccessibilityEvent event) {
+        try {
+            AccessibilityNodeInfo source = event.getSource();
+            if (source == null) return null;
+            // Sobe na árvore até encontrar o nó raiz
+            AccessibilityNodeInfo current = source;
+            AccessibilityNodeInfo parent = current.getParent();
+            while (parent != null) {
+                current.recycle();
+                current = parent;
+                parent = current.getParent();
+            }
+            return current; // retorna o nó raiz (não reciclado)
+        } catch (Exception e) {
+            Log.w(TAG, "getEventRoot erro: " + e.getMessage());
+            return null;
+        }
     }
 
     private double parseDouble(String value) {
