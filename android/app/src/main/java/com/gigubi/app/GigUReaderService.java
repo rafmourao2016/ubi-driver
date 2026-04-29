@@ -34,6 +34,7 @@ public class GigUReaderService extends AccessibilityService {
     private double accumSurge = 1.0;
     private long firstEventTime = 0;
     private long lastEmitTime   = 0;
+    private String lastEmittedHash = "";
     private Timer idleTimer = null;
     private boolean currentAppIsUber = false;
 
@@ -154,8 +155,14 @@ public class GigUReaderService extends AccessibilityService {
         Log.d(TAG, "Acumulado: R$" + accumPrice + " | " + accumKm + " km");
 
         if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
-            emitOffer(accumPrice, accumKm, accumTimeMin, accumSurge);
-            resetIdleTimer();
+            String currentHash = accumPrice + "_" + accumKm + "_" + accumTimeMin + "_" + accumSurge;
+            if (!currentHash.equals(lastEmittedHash)) {
+                emitOffer(accumPrice, accumKm, accumTimeMin, accumSurge);
+                lastEmittedHash = currentHash;
+                resetIdleTimer();
+            } else {
+                Log.d(TAG, "  [DEDUPLICADO] Oferta já emitida: " + currentHash);
+            }
         }
     }
 
@@ -168,6 +175,7 @@ public class GigUReaderService extends AccessibilityService {
                 OverlayPlugin overlay = OverlayPlugin.getInstance();
                 if (overlay != null) overlay.clearOverlay();
                 accumPrice = 0; accumKm = 0; firstEventTime = 0;
+                lastEmittedHash = ""; // Reseta o hash para permitir novas ofertas iguais depois de um tempo
             }
         }, IDLE_CLEAR_MS);
     }
@@ -270,15 +278,21 @@ public class GigUReaderService extends AccessibilityService {
 
         // Exemplo: Uber Price
         List<AccessibilityNodeInfo> priceNodes = root.findAccessibilityNodeInfosByViewId("com.ubercab:id/fare_amount");
-        if (priceNodes != null && !priceNodes.isEmpty()) {
-            AccessibilityNodeInfo node = priceNodes.get(0);
-            if (node.getText() != null) {
-                Matcher m = PRICE_PATTERN.matcher(node.getText().toString());
-                if (m.find()) {
-                    info.price = parseDouble(m.group(1));
-                    info.hasPrice = true;
-                    found = true;
+        if (priceNodes != null) {
+            if (!priceNodes.isEmpty()) {
+                AccessibilityNodeInfo node = priceNodes.get(0);
+                if (node != null && node.getText() != null) {
+                    Matcher m = PRICE_PATTERN.matcher(node.getText().toString());
+                    if (m.find()) {
+                        info.price = parseDouble(m.group(1));
+                        info.hasPrice = true;
+                        found = true;
+                    }
                 }
+            }
+            // Evita vazamento de memória reciclando todos os nós retornados
+            for (AccessibilityNodeInfo n : priceNodes) {
+                if (n != null) n.recycle();
             }
         }
 
@@ -294,30 +308,52 @@ public class GigUReaderService extends AccessibilityService {
 
         // Exemplo: Buscar âncora "Pagamento no app"
         List<AccessibilityNodeInfo> anchorNodes = root.findAccessibilityNodeInfosByText("Pagamento no app");
-        if (anchorNodes != null && !anchorNodes.isEmpty()) {
-            AccessibilityNodeInfo anchor = anchorNodes.get(0);
-            AccessibilityNodeInfo parent = anchor.getParent();
-            if (parent != null) {
-                // Navegar pelos filhos do pai da âncora para procurar preço e distância
-                for (int i = 0; i < parent.getChildCount(); i++) {
-                    AccessibilityNodeInfo sibling = parent.getChild(i);
-                    if (sibling != null && sibling.getText() != null) {
-                        String txt = sibling.getText().toString();
-                        
-                        // Tenta extrair preço do irmão
-                        Matcher pm = PRICE_PATTERN.matcher(txt);
-                        if (pm.find()) {
-                            info.price = parseDouble(pm.group(1));
-                            info.hasPrice = true;
+        if (anchorNodes != null) {
+            for (AccessibilityNodeInfo anchor : anchorNodes) {
+                if (anchor != null) {
+                    // Sobe até 3 níveis na árvore para encontrar a raiz do componente
+                    AccessibilityNodeInfo parent = anchor.getParent();
+                    int maxDepth = 3;
+                    while (parent != null && maxDepth > 0) {
+                        if (searchRecursivelyForPrice(parent, info, 3)) { // desce 3 níveis buscando
                             found = true;
+                            break;
                         }
+                        AccessibilityNodeInfo oldParent = parent;
+                        parent = parent.getParent();
+                        oldParent.recycle();
+                        maxDepth--;
                     }
+                    if (parent != null) parent.recycle();
+                    anchor.recycle();
                 }
             }
         }
 
         // Retorna true somente se encontrou dados vitais usando a âncora
         return found && info.hasPrice;
+    }
+
+    private boolean searchRecursivelyForPrice(AccessibilityNodeInfo node, RideInfo info, int depth) {
+        if (node == null || depth == 0) return false;
+        
+        CharSequence txt = node.getText();
+        if (txt != null) {
+            Matcher pm = PRICE_PATTERN.matcher(txt.toString());
+            if (pm.find()) {
+                info.price = parseDouble(pm.group(1));
+                info.hasPrice = true;
+                return true;
+            }
+        }
+        
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            boolean found = searchRecursivelyForPrice(child, info, depth - 1);
+            if (child != null) child.recycle();
+            if (found) return true;
+        }
+        return false;
     }
 
     private boolean extractByRegex(String fullText, RideInfo info) {
