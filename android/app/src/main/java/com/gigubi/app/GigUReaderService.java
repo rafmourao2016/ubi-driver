@@ -94,7 +94,7 @@ public class GigUReaderService extends AccessibilityService {
         int eventWindowId = -1;
         if (eventRoot != null) {
             eventWindowId = eventRoot.getWindowId();
-            processWindowRoot(eventRoot);
+            processWindowRoot(eventRoot, event.getEventType());
             eventRoot.recycle();
         }
 
@@ -103,7 +103,7 @@ public class GigUReaderService extends AccessibilityService {
             AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
             if (activeRoot != null) {
                 eventWindowId = activeRoot.getWindowId();
-                processWindowRoot(activeRoot);
+                processWindowRoot(activeRoot, event.getEventType());
                 activeRoot.recycle();
             }
         }
@@ -119,7 +119,7 @@ public class GigUReaderService extends AccessibilityService {
                     if (window.getId() == eventWindowId) continue;
                     AccessibilityNodeInfo root = window.getRoot();
                     if (root == null) continue;
-                    processWindowRoot(root);
+                    processWindowRoot(root, event.getEventType());
                     root.recycle();
                 }
             }
@@ -191,14 +191,22 @@ public class GigUReaderService extends AccessibilityService {
         public boolean hasPrice = false;
     }
 
-    private void processWindowRoot(AccessibilityNodeInfo root) {
+    private void processWindowRoot(AccessibilityNodeInfo root, int eventType) {
         if (root == null) return;
         
+        CharSequence pkg = root.getPackageName();
+        if (pkg != null) {
+            Log.d(TAG, "processWindowRoot INICIO - pacote: " + pkg.toString() + " | tipo: " + eventType);
+        }
+
         StringBuilder sb = new StringBuilder();
         extractAllText(root, sb);
         String fullText = sb.toString();
         
-        if (fullText.trim().isEmpty()) return;
+        if (fullText.trim().isEmpty()) {
+            if (pkg != null) Log.d(TAG, "processWindowRoot abortado: fullText vazio (tipo " + eventType + ")");
+            return;
+        }
 
         String lower = fullText.toLowerCase();
         // Se a janela contiver textos da NOSSA overlay, ignoramos a janela INTEIRA
@@ -206,9 +214,8 @@ public class GigUReaderService extends AccessibilityService {
             return;
         }
 
-        CharSequence pkg = root.getPackageName();
         if (pkg != null) {
-            Log.d(TAG, "extractRideInfo chamado - pacote: " + pkg.toString());
+            Log.d(TAG, "extractRideInfo chamado - pacote: " + pkg.toString() + " | tipo: " + eventType);
         }
 
         RideInfo info = extractRideInfo(root, fullText);
