@@ -225,9 +225,9 @@ public class GigUReaderService extends AccessibilityService {
 
         Log.d(TAG, "FULL_TEXT: " + fullText);
 
-        String lower = fullText.toLowerCase();
-        // Se a janela contiver textos da NOSSA overlay, ignoramos a janela INTEIRA
-        if (lower.contains("faltam") || lower.contains("simulador") || lower.contains("simular oferta")) {
+        // Só descarta se for claramente a nossa própria janela de overlay
+        String pkgStr = pkg != null ? pkg.toString() : "";
+        if (pkgStr.contains("com.gigubi.app")) {
             return;
         }
 
@@ -405,7 +405,10 @@ public class GigUReaderService extends AccessibilityService {
     private boolean extractByRegex(String fullText, RideInfo info) {
         boolean found = false;
         
-        Matcher pm = PRICE_PATTERN.matcher(fullText);
+        // Ignorar preço por km (ex: R$2,23/km) para não confundir com o preço total
+        String cleanText = fullText.replaceAll("R\\\\$[\\\\s\u00A0]*\\\\d+[.,]\\\\d+\\\\s*/\\\\s*km", "");
+        
+        Matcher pm = PRICE_PATTERN.matcher(cleanText);
         while (pm.find()) {
             double p = parseDouble(pm.group(1));
             if (p > 1 && p < 500) {
