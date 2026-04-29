@@ -182,12 +182,11 @@ public class GigUReaderService extends AccessibilityService {
 
     public static class RideInfo {
         public double price = 0.0;
-        public double distanceKm = 0.0;
-        public double timeMin = 0.0;
+        public List<Double> distances = new ArrayList<>();
+        public List<Double> times = new ArrayList<>();
         public double surgeMultiplier = 1.0;
         public String layerUsed = "";
         public boolean hasPrice = false;
-        public boolean hasKm = false;
     }
 
     private void processWindowRoot(AccessibilityNodeInfo root) {
@@ -216,12 +215,16 @@ public class GigUReaderService extends AccessibilityService {
                 accumPrice = info.price;
                 Log.d(TAG, "  -> Preço: R$" + info.price + " [" + info.layerUsed + "]");
             }
-            if (info.hasKm && info.distanceKm > 0.2 && !eventKmList.contains(info.distanceKm)) {
-                eventKmList.add(info.distanceKm);
-                Log.d(TAG, "  -> Km parcial: " + info.distanceKm + " [" + info.layerUsed + "]");
+            for (Double d : info.distances) {
+                if (d > 0.2 && !eventKmList.contains(d)) {
+                    eventKmList.add(d);
+                    Log.d(TAG, "  -> Km parcial: " + d + " [" + info.layerUsed + "]");
+                }
             }
-            if (info.timeMin > 0 && !eventTimeList.contains(info.timeMin)) {
-                eventTimeList.add(info.timeMin);
+            for (Double t : info.times) {
+                if (t > 0 && !eventTimeList.contains(t)) {
+                    eventTimeList.add(t);
+                }
             }
             if (info.surgeMultiplier > 1.0 && info.surgeMultiplier > accumSurge) {
                 accumSurge = info.surgeMultiplier;
@@ -314,28 +317,33 @@ public class GigUReaderService extends AccessibilityService {
     private boolean extractByAnchor(AccessibilityNodeInfo root, RideInfo info) {
         boolean found = false;
 
-        // Exemplo: Buscar âncora "Pagamento no app"
-        List<AccessibilityNodeInfo> anchorNodes = root.findAccessibilityNodeInfosByText("Pagamento no app");
-        if (anchorNodes != null) {
-            for (AccessibilityNodeInfo anchor : anchorNodes) {
-                if (anchor != null) {
-                    // Sobe até 3 níveis na árvore para encontrar a raiz do componente
-                    AccessibilityNodeInfo parent = anchor.getParent();
-                    int maxDepth = 3;
-                    while (parent != null && maxDepth > 0) {
-                        if (searchRecursivelyForPrice(parent, info, 3)) { // desce 3 níveis buscando
-                            found = true;
-                            break;
+        // Âncoras comuns para Uber e 99
+        String[] possibleAnchors = {"Pagamento no app", "Dinheiro", "Cartão", "Voucher", "Pix"};
+
+        for (String anchorText : possibleAnchors) {
+            List<AccessibilityNodeInfo> anchorNodes = root.findAccessibilityNodeInfosByText(anchorText);
+            if (anchorNodes != null) {
+                for (AccessibilityNodeInfo anchor : anchorNodes) {
+                    if (anchor != null) {
+                        // Sobe até 3 níveis na árvore para encontrar a raiz do componente
+                        AccessibilityNodeInfo parent = anchor.getParent();
+                        int maxDepth = 3;
+                        while (parent != null && maxDepth > 0) {
+                            if (searchRecursivelyForPrice(parent, info, 3)) { // desce 3 níveis buscando
+                                found = true;
+                                break;
+                            }
+                            AccessibilityNodeInfo oldParent = parent;
+                            parent = parent.getParent();
+                            oldParent.recycle();
+                            maxDepth--;
                         }
-                        AccessibilityNodeInfo oldParent = parent;
-                        parent = parent.getParent();
-                        oldParent.recycle();
-                        maxDepth--;
+                        if (parent != null) parent.recycle();
+                        anchor.recycle();
                     }
-                    if (parent != null) parent.recycle();
-                    anchor.recycle();
                 }
             }
+            if (found) break; // Se já encontrou preço usando uma âncora, para de procurar
         }
 
         // Retorna true somente se encontrou dados vitais usando a âncora
@@ -383,8 +391,7 @@ public class GigUReaderService extends AccessibilityService {
             String unit = dm.group(2).toLowerCase().trim();
             double km = unit.equals("m") ? d / 1000.0 : d;
             if (km > 0.2 && km < 100) {
-                info.distanceKm = km;
-                info.hasKm = true;
+                info.distances.add(km);
                 found = true;
             }
         }
@@ -394,7 +401,7 @@ public class GigUReaderService extends AccessibilityService {
         while (tm.find()) {
             double t = parseDouble(tm.group(1));
             if (t > 0 && t < 200) {
-                info.timeMin = t;
+                info.times.add(t);
                 found = true;
             }
         }
