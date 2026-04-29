@@ -95,12 +95,24 @@ public class GigUReaderService extends AccessibilityService {
         eventTimeList.clear();
 
         // ── 1) Janela do evento (via source node → raiz) ──
-        AccessibilityNodeInfo eventRoot = getEventRoot(event);
+        AccessibilityNodeInfo sourceRoot = event.getSource();
+        AccessibilityNodeInfo eventRoot = null;
+        if (sourceRoot != null) {
+            // Sobe na árvore até a raiz real da janela (evita 'fullText vazio' de views filhas)
+            eventRoot = sourceRoot;
+            while (eventRoot.getParent() != null) {
+                AccessibilityNodeInfo parent = eventRoot.getParent();
+                if (eventRoot != sourceRoot) eventRoot.recycle();
+                eventRoot = parent;
+            }
+        }
+
         int eventWindowId = -1;
         if (eventRoot != null) {
             eventWindowId = eventRoot.getWindowId();
             processWindowRoot(eventRoot, event.getEventType());
-            eventRoot.recycle();
+            if (eventRoot != sourceRoot) eventRoot.recycle();
+            sourceRoot.recycle();
         }
 
         // ── 2) Fallback: janela ativa (quando source é null) ──
@@ -238,7 +250,13 @@ public class GigUReaderService extends AccessibilityService {
             || lowerFull.contains("min");
 
         if (!hasPrice || !hasRideKeyword) {
-            Log.d(TAG, "[SKIP] Relevância falhou. hasPrice=" + hasPrice + ", hasRideKeyword=" + hasRideKeyword + " | Pkg: " + (pkg != null ? pkg.toString() : "null"));
+            // Se for do app99 ou uber, vamos logar o texto completo para diagnosticar pq falhou
+            if (pkg != null && (pkg.toString().contains("app99") || pkg.toString().contains("ubercab"))) {
+                Log.d(TAG, "[SKIP] 99/Uber Relevância falhou. hasPrice=" + hasPrice + " | TEXTO: " + fullText);
+            } else if (hasPrice || hasRideKeyword) {
+                // Se for outro app mas tiver alguma keyword, vamos logar pra ver
+                Log.d(TAG, "[SKIP] Quase passou. hasPrice=" + hasPrice + " | Pkg: " + pkg + " | TEXTO: " + fullText);
+            }
             return;
         }
 
