@@ -165,7 +165,6 @@ public class GigUReaderService extends AccessibilityService {
     private void processNode(AccessibilityNodeInfo node) {
         if (node == null) return;
 
-        // ── Regra de Ouro: NUNCA ler nosso próprio app/overlay ──
         CharSequence pkg = node.getPackageName();
         if (pkg != null && pkg.toString().contains("com.gigubi.app")) {
             return;
@@ -173,8 +172,24 @@ public class GigUReaderService extends AccessibilityService {
 
         CharSequence txt = node.getText();
         CharSequence dsc = node.getContentDescription();
-        if (txt != null) extractData(txt.toString().replaceAll("[\t\n\r]", " "));
-        if (dsc != null) extractData(dsc.toString().replaceAll("[\t\n\r]", " "));
+        
+        if (txt != null) {
+            String s = txt.toString().replaceAll("[\t\n\r]", " ");
+            // Proteção extra: ignora textos do nosso próprio overlay caso o pacote venha vazio/diferente
+            String lower = s.toLowerCase();
+            if (!lower.contains("faltam") && !lower.contains("simulador") && !lower.contains("simular oferta")) {
+                extractData(s);
+            }
+        }
+        
+        if (dsc != null) {
+            String s = dsc.toString().replaceAll("[\t\n\r]", " ");
+            String lower = s.toLowerCase();
+            if (!lower.contains("faltam") && !lower.contains("simulador") && !lower.contains("simular oferta")) {
+                extractData(s);
+            }
+        }
+
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             processNode(child);
@@ -187,7 +202,7 @@ public class GigUReaderService extends AccessibilityService {
         while (pm.find()) {
             double p = parseDouble(pm.group(1));
             if (p > 1 && p < 500 && p > accumPrice) {
-                Log.d(TAG, "  -> Preço: R$" + p);
+                Log.d(TAG, "  -> Preço: R$" + p + " (texto: '" + text + "')");
                 accumPrice = p;
             }
         }
@@ -197,7 +212,7 @@ public class GigUReaderService extends AccessibilityService {
             String unit = dm.group(2).toLowerCase().trim();
             double km = unit.equals("m") ? d / 1000.0 : d;
             if (km > 0.2 && km < 100 && !eventKmList.contains(km)) {
-                Log.d(TAG, "  -> Km parcial: " + km);
+                Log.d(TAG, "  -> Km parcial: " + km + " (texto: '" + text + "')");
                 eventKmList.add(km);
             }
         }
