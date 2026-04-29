@@ -63,8 +63,17 @@ public class GigUReaderService extends AccessibilityService {
         // ── 0) Caso especial: Notificações (Heads-up) ──
         if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             if (pkg.contains("app99") || pkg.contains("ubercab")) {
-                Log.d(TAG, "Notificação de corrida detectada (" + pkg + ")! Escaneando janela...");
-                processWindowRoot(getRootInActiveWindow(), event.getEventType());
+                Log.d(TAG, "Notificação de corrida detectada (" + pkg + ")! Escaneando TODAS as janelas...");
+                List<AccessibilityWindowInfo> windows = getWindows();
+                if (windows != null) {
+                    for (AccessibilityWindowInfo win : windows) {
+                        AccessibilityNodeInfo winRoot = win.getRoot();
+                        if (winRoot != null) {
+                            processWindowRoot(winRoot, event.getEventType());
+                            winRoot.recycle();
+                        }
+                    }
+                }
             }
             return;
         }
