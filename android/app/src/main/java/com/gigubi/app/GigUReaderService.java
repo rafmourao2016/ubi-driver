@@ -228,16 +228,17 @@ public class GigUReaderService extends AccessibilityService {
         }
 
         // ── Guard de Conteúdo ──
-        // Só processa se parecer um cartão de corrida real (R$ + Palavra de contexto)
+        // Só processa se parecer um cartão de corrida real (R$ E Palavra de contexto)
         String lowerFull = fullText.toLowerCase();
         boolean hasPrice = lowerFull.contains("r$");
         boolean hasRideKeyword = lowerFull.contains("aceitar") 
             || lowerFull.contains("pagamento")
             || lowerFull.contains("dinheiro")
-            || lowerFull.contains("km)")
-            || lowerFull.contains("min (");
+            || lowerFull.contains("km")
+            || lowerFull.contains("min");
 
         if (!hasPrice || !hasRideKeyword) {
+            Log.d(TAG, "[SKIP] Relevância falhou. hasPrice=" + hasPrice + ", hasRideKeyword=" + hasRideKeyword + " | Pkg: " + (pkg != null ? pkg.toString() : "null"));
             return;
         }
 
