@@ -286,6 +286,13 @@ public class GigUReaderService extends AccessibilityService {
         
         if (fullText.isEmpty()) {
             Log.d(TAG, "processWindowRoot abortado: [vazio] pkg=" + pkg + " class=" + root.getClassName() + " children=" + root.getChildCount());
+            
+            // NOVIDADE: Se for 99 ou Uber e estiver vazio, tenta OCR imediatamente!
+            String pkgStr = pkg != null ? pkg.toString() : "";
+            if (pkgStr.contains("app99") || pkgStr.contains("ubercab")) {
+                Log.d(TAG, "Janela vazia detectada no app de transporte. Disparando OCR...");
+                triggerOcr();
+            }
             return;
         }
 
