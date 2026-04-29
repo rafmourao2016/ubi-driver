@@ -207,10 +207,18 @@ public class GigUReaderService extends AccessibilityService {
         if (fullText.trim().isEmpty()) {
             if (pkg != null) {
                 Log.d(TAG, "processWindowRoot abortado: fullText vazio (tipo " + eventType + ")");
-                // Comentado para evitar flood na tela, mas no logcat ajuda
             }
             return;
         }
+
+        // ── Guard de Relevância ──
+        // Só processa se tiver indícios de uma oferta (Preço ou KM)
+        if (!fullText.contains("R$") && !fullText.contains("km") && !fullText.contains("min") && !fullText.contains("Aceitar")) {
+            // Log.d(TAG, "Guard relevância: texto sem corrida, abortando");
+            return;
+        }
+
+        Log.d(TAG, "FULL_TEXT: " + fullText);
 
         String lower = fullText.toLowerCase();
         // Se a janela contiver textos da NOSSA overlay, ignoramos a janela INTEIRA
