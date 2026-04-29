@@ -99,16 +99,14 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
 
-        // ── 3) Janelas extras — SÓ TYPE_APPLICATION ──
-        // TYPE_INPUT_METHOD = teclado, TYPE_SYSTEM = nossa overlay e barras do sistema
-        // Só escaneamos janelas de app (evita ler nosso próprio overlay!)
+        // ── 3) Janelas extras — Todas exceto teclado ──
+        // Lembrete: Nós já temos um filtro de texto no processNode para ignorar
+        // nossa própria overlay ('Faltam', 'Simulador'), então é seguro ler TYPE_SYSTEM
         try {
             List<AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
                 for (AccessibilityWindowInfo window : windows) {
-                    int wType = window.getType();
-                    // Só janelas de aplicativo — ignora sistema, teclado e overlays
-                    if (wType != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                    if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
                     if (window.getId() == eventWindowId) continue;
                     AccessibilityNodeInfo root = window.getRoot();
                     if (root == null) continue;
