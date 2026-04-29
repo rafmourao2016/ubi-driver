@@ -48,6 +48,21 @@ public class GigUPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * Simula uma oferta de corrida para testar TODO o pipeline
+     * (overlay, vibração, cálculo) sem precisar receber corrida real.
+     * Parâmetros opcionais: price (padrão 18.50), km (padrão 7.2)
+     */
+    @PluginMethod
+    public void simulateOffer(PluginCall call) {
+        double price = call.getDouble("price", 18.50);
+        double km    = call.getDouble("km", 7.2);
+        Log.i("GigUPlugin", "[SIMULAÇÃO] Disparando oferta fake: R$" + price + " | " + km + " km");
+        emitOfferReceived("SIMULAÇÃO", price, km);
+        call.resolve();
+    }
+
+
     /** Verifica se as duas permissões foram concedidas */
     @PluginMethod
     public void checkPermissions(PluginCall call) {

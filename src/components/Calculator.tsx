@@ -85,6 +85,28 @@ export default function Calculator() {
     if (result.success && navigator.vibrate) navigator.vibrate(100);
   };
 
+  // ── SIMULADOR (testa o pipeline completo sem corrida real) ──
+  const [simPrice, setSimPrice] = useState(18.50);
+  const [simKm, setSimKm]       = useState(7.2);
+  const [simLoading, setSimLoading] = useState(false);
+
+  const handleSimulate = async () => {
+    setSimLoading(true);
+    try {
+      if (typeof window !== 'undefined' && (window as any).Capacitor) {
+        const plugin = (window as any).Capacitor.Plugins.GigUPlugin;
+        if (plugin?.simulateOffer) {
+          await plugin.simulateOffer({ price: simPrice, km: simKm });
+          return; // overlay + vibração disparam via pipeline nativo
+        }
+      }
+      // Fallback web: atualiza os inputs diretamente
+      setInput(prev => ({ ...prev, grossEarnings: simPrice, distanceKm: simKm }));
+    } finally {
+      setTimeout(() => setSimLoading(false), 600);
+    }
+  };
+
   const f = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -274,6 +296,61 @@ export default function Calculator() {
         </div>
       </section>
 
+      {/* ── SIMULADOR DE TESTE ── */}
+      <section style={{
+        marginTop: 16,
+        background: 'rgba(109,40,217,0.08)',
+        border: '1px dashed rgba(109,40,217,0.35)',
+        borderRadius: 20, padding: '16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: '1rem' }}>🧪</span>
+          <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Simulador — Teste sem Corrida Real
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: '10px 14px' }}>
+            <label style={{ marginBottom: 4, color: '#7c3aed' }}>💰 Valor (R$)</label>
+            <input
+              type="number" step="0.01"
+              value={simPrice === 0 ? '' : simPrice}
+              onChange={e => setSimPrice(parseFloat(e.target.value) || 0)}
+              style={{ fontSize: '1.3rem', background: 'transparent', border: 'none', color: '#fff', fontWeight: 800, width: '100%', outline: 'none', fontFamily: 'Outfit, sans-serif' }}
+            />
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 14, padding: '10px 14px' }}>
+            <label style={{ marginBottom: 4, color: '#7c3aed' }}>📍 Km</label>
+            <input
+              type="number" step="0.1"
+              value={simKm === 0 ? '' : simKm}
+              onChange={e => setSimKm(parseFloat(e.target.value) || 0)}
+              style={{ fontSize: '1.3rem', background: 'transparent', border: 'none', color: '#fff', fontWeight: 800, width: '100%', outline: 'none', fontFamily: 'Outfit, sans-serif' }}
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleSimulate}
+          disabled={simLoading}
+          style={{
+            width: '100%', padding: '13px', borderRadius: 14, border: 'none',
+            background: simLoading
+              ? 'rgba(109,40,217,0.3)'
+              : 'linear-gradient(135deg, #6d28d9, #a855f7)',
+            color: '#fff', fontFamily: 'Outfit, sans-serif',
+            fontWeight: 900, fontSize: '0.82rem',
+            letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer',
+            boxShadow: simLoading ? 'none' : '0 6px 16px -4px rgba(109,40,217,0.5)',
+            transition: 'all 0.2s',
+          }}
+        >
+          {simLoading ? '⚡ Disparando...' : '⚡ Simular Oferta Agora'}
+        </button>
+        <p style={{ fontSize: '0.65rem', color: '#6b7280', textAlign: 'center', marginTop: 8 }}>
+          Testa overlay, vibração e cálculo — sem afetar sua taxa de aceitação
+        </p>
+      </section>
+
       {/* ── SAVE BUTTON ── */}
       <button onClick={syncDataWithDaily} disabled={loading} className="btn-primary"
         style={{ marginTop: 16, opacity: loading ? 0.6 : 1 }}>
@@ -285,6 +362,7 @@ export default function Calculator() {
           Sync: {lastSynced.toLocaleTimeString()}
         </p>
       )}
+
 
       <PiPMode
         netProfit={results.netProfit}
