@@ -228,15 +228,17 @@ public class GigUReaderService extends AccessibilityService {
         }
 
         // ── Guard de Relevância ──
-        // Só processa se tiver indícios de uma oferta (Preço ou KM)
+        // Só processa se tiver indícios FORTES de uma oferta (Preço + (KM ou Min ou Aceitar))
         String lowerFull = fullText.toLowerCase();
-        boolean hasKeywords = lowerFull.contains("r$") || lowerFull.contains("km") || lowerFull.contains("min") || lowerFull.contains("aceitar");
+        boolean hasPrice = lowerFull.contains("r$");
+        boolean hasContext = lowerFull.contains("km") || lowerFull.contains("min") || lowerFull.contains("aceitar") || lowerFull.contains("dinheiro");
         
-        if (!hasKeywords) {
+        if (!hasPrice || !hasContext) {
+            // Se for um app de transporte, avisamos que pulamos por falta de dados
             if (pkg != null) {
                 String p = pkg.toString();
                 if (p.contains("ubercab") || p.contains("app99")) {
-                    notifyDiag("[SKIP] " + p + " sem keywords");
+                    // notifyDiag("[SKIP] " + p + " dados incompletos");
                 }
             }
             return;
