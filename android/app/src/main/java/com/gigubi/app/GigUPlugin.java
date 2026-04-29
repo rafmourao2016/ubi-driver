@@ -85,11 +85,13 @@ public class GigUPlugin extends Plugin {
         boolean hasOverlay      = Settings.canDrawOverlays(getContext());
         boolean hasAccessibility = isAccessibilityServiceEnabled();
         boolean hasNotification = isNotificationServiceEnabled();
+        boolean isRunning       = GigUReaderService.getInstance() != null;
 
         JSObject ret = new JSObject();
         ret.put("overlayGranted", hasOverlay);
         ret.put("accessibilityGranted", hasAccessibility);
         ret.put("notificationGranted", hasNotification);
+        ret.put("serviceRunning", isRunning);
         call.resolve(ret);
     }
 

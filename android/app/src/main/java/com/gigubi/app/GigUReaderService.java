@@ -4,6 +4,13 @@ import android.accessibilityservice.AccessibilityService;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.graphics.Color;
+import androidx.core.app.NotificationCompat;
 import android.view.accessibility.AccessibilityWindowInfo;
 import android.graphics.Bitmap;
 import android.util.DisplayMetrics;
@@ -690,11 +697,46 @@ public class GigUReaderService extends AccessibilityService {
 
     @Override public void onInterrupt() { Log.w(TAG, "Serviço interrompido"); }
 
+    private static final String CHANNEL_ID = "gigu_service_channel";
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
         instance = this;
         Log.i(TAG, "=== GigU Accessibility CONECTADO ===");
+        
+        createNotificationChannel();
+        startForeground(1001, createNotification());
+    }
+
+    private void createNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            NotificationChannel serviceChannel = new NotificationChannel(
+                CHANNEL_ID,
+                "Ubi Driver Monitor",
+                NotificationManager.IMPORTANCE_LOW
+            );
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(serviceChannel);
+            }
+        }
+    }
+
+    private Notification createNotification() {
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        );
+
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Ubi Driver Ativo")
+            .setContentText("Monitorando ofertas da 99 e Uber...")
+            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .build();
     }
 
     @Override

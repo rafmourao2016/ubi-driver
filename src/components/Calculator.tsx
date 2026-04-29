@@ -36,6 +36,26 @@ export default function Calculator() {
     localStorage.setItem('ubi_daily_acc', dailyAccumulated.toString());
   }, [dailyGoal, dailyAccumulated]);
 
+  const [serviceStatus, setServiceStatus] = useState({ running: false, permissions: false });
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (typeof window !== 'undefined' && (window as any).Capacitor) {
+        const plugin = (window as any).Capacitor.Plugins.GigUPlugin;
+        if (plugin) {
+          const res = await plugin.checkPermissions();
+          setServiceStatus({
+            running: res.serviceRunning,
+            permissions: res.accessibilityGranted && res.notificationGranted
+          });
+        }
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).Capacitor) {
       const giguPlugin = (window as any).Capacitor.Plugins.GigUPlugin;
@@ -131,7 +151,24 @@ export default function Calculator() {
             boxShadow: '0 4px 14px rgba(192,132,252,0.35)',
           }}>U</div>
           <div>
-            <div style={{ fontWeight: 900, fontSize: '1rem', lineHeight: 1, color: '#fff' }}>Ubi Driver</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontWeight: 900, fontSize: '1rem', lineHeight: 1, color: '#fff' }}>Ubi Driver</div>
+              <div 
+                onClick={() => {
+                  if (!serviceStatus.running && (window as any).Capacitor) {
+                    (window as any).Capacitor.Plugins.GigUPlugin.openNotificationSettings();
+                  }
+                }}
+                style={{
+                  fontSize: '0.6rem', fontWeight: 900, padding: '2px 6px', borderRadius: 6,
+                  background: serviceStatus.running ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                  color: serviceStatus.running ? '#4ade80' : '#f87171',
+                  border: `1px solid ${serviceStatus.running ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  cursor: 'pointer'
+                }}>
+                {serviceStatus.running ? '🟢 ATIVO' : '🔴 INATIVO'}
+              </div>
+            </div>
             <div style={{ fontWeight: 700, fontSize: '0.65rem', color: '#c084fc', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 2 }}>Smart Overlay</div>
           </div>
         </div>
