@@ -60,19 +60,22 @@ public class GigUReaderService extends AccessibilityService {
             Log.d(TAG, "[PKG_ALL] " + pkg + " | tipo: " + event.getEventType());
         }
 
-        // ── Filtra Uber, 99 e SystemUI (onde overlays podem aparecer) ──
-        boolean isUber = pkg.contains("uber");
-        boolean is99   = pkg.contains("99")
-                      || pkg.contains("taxis")
-                      || pkg.contains("noventaenove")
-                      || pkg.contains("app99");
-        boolean isSystemUI = pkg.contains("systemui");
+        // ── Filtro Estrito: Evento e Janela Ativa devem ser Uber/99 ──
+        boolean eventIsUber = pkg.contains("ubercab");
+        boolean eventIs99   = pkg.contains("app99") || pkg.contains("taxis") || pkg.contains("noventaenove");
+        if (!eventIsUber && !eventIs99) return;
 
-        if (!isUber && !is99 && !isSystemUI) return;
+        AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
+        if (activeRoot == null) return;
+        String activePkg = activeRoot.getPackageName() != null ? activeRoot.getPackageName().toString() : "";
+        boolean activeIsUber = activePkg.contains("ubercab");
+        boolean activeIs99   = activePkg.contains("app99") || activePkg.contains("taxis") || activePkg.contains("noventaenove");
+        activeRoot.recycle();
 
-        if (isUber) currentAppIsUber = true;
-        if (is99)   currentAppIsUber = false;
-        // se for systemUI, mantém a flag de qual app estava aberto antes
+        if (!activeIsUber && !activeIs99) return;
+
+        if (eventIsUber) currentAppIsUber = true;
+        if (eventIs99)   currentAppIsUber = false;
 
         Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
         notifyDiag("[✓ UBER/99] " + pkg + " tipo:" + event.getEventType());
