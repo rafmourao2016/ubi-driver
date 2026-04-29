@@ -17,12 +17,16 @@ export default function Calculator() {
   });
 
   const [dailyGoal, setDailyGoal] = useState(250);
+  const [dailyGoalStr, setDailyGoalStr] = useState('250'); // string para permitir apagar o zero
   const [dailyAccumulated, setDailyAccumulated] = useState(0);
 
   useEffect(() => {
     const savedGoal = localStorage.getItem('ubi_daily_goal');
     const savedAcc = localStorage.getItem('ubi_daily_acc');
-    if (savedGoal) setDailyGoal(parseFloat(savedGoal));
+    if (savedGoal) {
+      setDailyGoal(parseFloat(savedGoal));
+      setDailyGoalStr(savedGoal);
+    }
     if (savedAcc) setDailyAccumulated(parseFloat(savedAcc));
   }, []);
 
@@ -131,7 +135,16 @@ export default function Calculator() {
             <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Meta</div>
             <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '4px 10px' }}>
               <span style={{ color: '#64748b', fontSize: '0.8rem', marginRight: 2 }}>R$</span>
-              <input type="number" value={dailyGoal} onChange={e => setDailyGoal(parseFloat(e.target.value) || 0)}
+              <input type="number" value={dailyGoalStr}
+              onChange={e => setDailyGoalStr(e.target.value)}
+              onBlur={() => {
+                const parsed = parseFloat(dailyGoalStr);
+                if (!isNaN(parsed) && parsed > 0) {
+                  setDailyGoal(parsed);
+                } else {
+                  setDailyGoalStr(dailyGoal.toString());
+                }
+              }}
                 style={{ width: 56, fontSize: '0.9rem', fontWeight: 900, color: '#c084fc', textAlign: 'right' }} />
             </div>
           </div>
