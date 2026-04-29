@@ -60,6 +60,15 @@ public class GigUReaderService extends AccessibilityService {
             Log.d(TAG, "[PKG_ALL] " + pkg + " | tipo: " + event.getEventType());
         }
 
+        // ── 0) Caso especial: Notificações (Heads-up) ──
+        if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+            if (pkg.contains("app99") || pkg.contains("ubercab")) {
+                Log.d(TAG, "Notificação de corrida detectada (" + pkg + ")! Escaneando janela...");
+                processWindowRoot(getRootInActiveWindow(), event.getEventType());
+            }
+            return;
+        }
+
         // ── Filtro Estrito: Evento OU Janela Ativa devem ser Uber/99 ──
         boolean eventIsUber = pkg.contains("ubercab");
         boolean eventIs99   = pkg.contains("app99") || pkg.contains("taxis") || pkg.contains("noventaenove");
