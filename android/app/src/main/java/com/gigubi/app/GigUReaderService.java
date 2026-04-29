@@ -116,6 +116,7 @@ public class GigUReaderService extends AccessibilityService {
         // ── 3) Janelas extras — Todas exceto teclado ──
         // Lembrete: Nós já temos um filtro de texto no processNode para ignorar
         // nossa própria overlay ('Faltam', 'Simulador'), então é seguro ler TYPE_SYSTEM
+        // ── 3) Janelas extras — Todas exceto teclado ──
         try {
             List<AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
@@ -123,7 +124,17 @@ public class GigUReaderService extends AccessibilityService {
                     if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
                     if (window.getId() == eventWindowId) continue;
                     AccessibilityNodeInfo root = window.getRoot();
-                    if (root == null) continue;
+                    if (root == null) {
+                        // Log.d(TAG, "Window root null id=" + window.getId());
+                        continue;
+                    }
+                    
+                    // Trace de janela (ajuda a descobrir nomes de pacotes ocultos)
+                    CharSequence wPkg = root.getPackageName();
+                    if (wPkg != null && (eventIsUber || eventIs99)) {
+                        Log.d(TAG, "Window Trace: " + wPkg.toString() + " id=" + window.getId());
+                    }
+
                     processWindowRoot(root, event.getEventType());
                     root.recycle();
                 }
@@ -218,8 +229,16 @@ public class GigUReaderService extends AccessibilityService {
 
         // ── Guard de Relevância ──
         // Só processa se tiver indícios de uma oferta (Preço ou KM)
-        if (!fullText.contains("R$") && !fullText.contains("km") && !fullText.contains("min") && !fullText.contains("Aceitar")) {
-            // Log.d(TAG, "Guard relevância: texto sem corrida, abortando");
+        String lowerFull = fullText.toLowerCase();
+        boolean hasKeywords = lowerFull.contains("r$") || lowerFull.contains("km") || lowerFull.contains("min") || lowerFull.contains("aceitar");
+        
+        if (!hasKeywords) {
+            if (pkg != null) {
+                String p = pkg.toString();
+                if (p.contains("ubercab") || p.contains("app99")) {
+                    notifyDiag("[SKIP] " + p + " sem keywords");
+                }
+            }
             return;
         }
 
