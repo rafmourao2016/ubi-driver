@@ -286,7 +286,13 @@ export default function Calculator() {
         </p>
       )}
 
-      <PiPMode netProfit={results.netProfit} margin={results.profitMargin} profitPerKm={results.profitPerKm} />
+      <PiPMode
+        netProfit={results.netProfit}
+        margin={results.profitMargin}
+        profitPerKm={results.profitPerKm}
+        dailyGoal={dailyGoal}
+        dailyAccumulated={dailyAccumulated}
+      />
     </div>
   );
 }

@@ -29,15 +29,23 @@ public class OverlayPlugin extends Plugin {
     private static OverlayPlugin instance;
     private WindowManager windowManager;
     private FrameLayout overlayView;
+
+    // Views
     private TextView profitText;
     private TextView statsText;
     private TextView badgeText;
+    private TextView goalRemainingText;
+    private View goalProgressFill;
     private GradientDrawable badgeBg;
     private WindowManager.LayoutParams params;
 
-    // Debounce: evita piscar ao receber eventos repetidos com valores iguais
+    // Debounce
     private double lastRenderedProfit = Double.MIN_VALUE;
     private double lastRenderedMargin = Double.MIN_VALUE;
+
+    // Meta diária
+    private double dailyGoal        = 250.0;
+    private double dailyAccumulated = 0.0;
 
     @Override
     public void load() {
@@ -49,11 +57,15 @@ public class OverlayPlugin extends Plugin {
         return instance;
     }
 
+    // ── Plugin Methods ──────────────────────────────────────────────
+
     @PluginMethod
     public void showOverlay(PluginCall call) {
-        double netProfit = call.getDouble("netProfit", 0.0);
-        double margin    = call.getDouble("margin", 0.0);
+        double netProfit   = call.getDouble("netProfit", 0.0);
+        double margin      = call.getDouble("margin", 0.0);
         double profitPerKm = call.getDouble("profitPerKm", 0.0);
+        dailyGoal        = call.getDouble("dailyGoal", dailyGoal);
+        dailyAccumulated = call.getDouble("dailyAccumulated", dailyAccumulated);
 
         getActivity().runOnUiThread(() -> {
             if (!Settings.canDrawOverlays(getContext())) {
@@ -79,7 +91,13 @@ public class OverlayPlugin extends Plugin {
         double netProfit   = call.getDouble("netProfit", 0.0);
         double margin      = call.getDouble("margin", 0.0);
         double profitPerKm = call.getDouble("profitPerKm", 0.0);
-        getActivity().runOnUiThread(() -> { updateView(netProfit, margin, profitPerKm); call.resolve(); });
+        dailyGoal        = call.getDouble("dailyGoal", dailyGoal);
+        dailyAccumulated = call.getDouble("dailyAccumulated", dailyAccumulated);
+
+        getActivity().runOnUiThread(() -> {
+            updateView(netProfit, margin, profitPerKm);
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -112,35 +130,34 @@ public class OverlayPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             if (profitText == null) return;
             profitText.setText("Buscando...");
-            profitText.setTextSize(24);
-            statsText.setText("Aguardando nova corrida");
+            profitText.setTextSize(22);
+            statsText.setText("Aguardando corrida");
             badgeText.setText("OCIOSO");
             badgeBg.setColor(Color.parseColor("#374151"));
+            updateGoalViews(); // mantém meta visível mesmo em idle
         });
     }
 
-    // ─────────────────────────────────────────────────────────────
-    //  Design "fofinho" — cantos arredondados, gradiente, pill badge
-    // ─────────────────────────────────────────────────────────────
+    // ── Overlay Construction ────────────────────────────────────────
+
     private void createOverlay(double netProfit, double margin, double profitPerKm) {
         windowManager = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
 
-        // ── Root frame com cantos arredondados e gradiente ──
         overlayView = new FrameLayout(getContext());
 
+        // Fundo: gradiente escuro com cantos arredondados
         GradientDrawable rootBg = new GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            new int[]{ Color.parseColor("#F0131325"), Color.parseColor("#F00D0D1C") }
+            new int[]{ Color.parseColor("#F2131325"), Color.parseColor("#F00D0D1C") }
         );
         rootBg.setCornerRadius(dp(22));
-        rootBg.setStroke(dp(1), Color.parseColor("#6D28D9")); // borda roxa
+        rootBg.setStroke(dp(1), Color.parseColor("#6D28D9"));
         overlayView.setBackground(rootBg);
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             overlayView.setElevation(dp(8));
         }
 
-        // ── Inner layout ──
+        // ── Container vertical ──
         LinearLayout inner = new LinearLayout(getContext());
         inner.setOrientation(LinearLayout.VERTICAL);
         inner.setPadding(dp(14), dp(10), dp(14), dp(12));
@@ -160,10 +177,9 @@ public class OverlayPlugin extends Plugin {
         View spacer = new View(getContext());
         spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
 
-        // Badge pill arredondado
+        // Badge pill
         badgeBg = new GradientDrawable();
         badgeBg.setCornerRadius(dp(20));
-
         badgeText = new TextView(getContext());
         badgeText.setTextSize(9);
         badgeText.setTypeface(null, Typeface.BOLD);
@@ -183,24 +199,81 @@ public class OverlayPlugin extends Plugin {
         topRow.addView(badgeText);
         topRow.addView(closeBtn);
 
-        // ── Lucro principal ──
+        // ── Lucro desta corrida ──
         profitText = new TextView(getContext());
         profitText.setTextColor(Color.WHITE);
         profitText.setTextSize(30);
         profitText.setTypeface(null, Typeface.BOLD);
         profitText.setPadding(0, dp(6), 0, dp(2));
 
-        // ── Stats: margem e por km ──
+        // ── Stats: margem · R$/km ──
         statsText = new TextView(getContext());
         statsText.setTextColor(Color.parseColor("#9CA3AF"));
-        statsText.setTextSize(11);
+        statsText.setTextSize(10);
+        statsText.setPadding(0, 0, 0, dp(8));
 
+        // ── Separador ──
+        View divider = new View(getContext());
+        divider.setBackgroundColor(Color.parseColor("#1F2937"));
+        LinearLayout.LayoutParams divParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        divParams.setMargins(0, dp(2), 0, dp(8));
+        divider.setLayoutParams(divParams);
+
+        // ── Meta: linha "🎯 Faltam R$ X,XX" ──
+        LinearLayout goalRow = new LinearLayout(getContext());
+        goalRow.setOrientation(LinearLayout.HORIZONTAL);
+        goalRow.setGravity(Gravity.CENTER_VERTICAL);
+        goalRow.setPadding(0, 0, 0, dp(6));
+
+        TextView goalLabel = new TextView(getContext());
+        goalLabel.setText("🎯 Faltam ");
+        goalLabel.setTextColor(Color.parseColor("#6B7280"));
+        goalLabel.setTextSize(10);
+
+        goalRemainingText = new TextView(getContext());
+        goalRemainingText.setTextColor(Color.parseColor("#C084FC"));
+        goalRemainingText.setTextSize(10);
+        goalRemainingText.setTypeface(null, Typeface.BOLD);
+
+        goalRow.addView(goalLabel);
+        goalRow.addView(goalRemainingText);
+
+        // ── Barra de progresso da meta ──
+        FrameLayout goalBarContainer = new FrameLayout(getContext());
+        GradientDrawable barBg = new GradientDrawable();
+        barBg.setCornerRadius(dp(10));
+        barBg.setColor(Color.parseColor("#1F2937"));
+        LinearLayout.LayoutParams containerParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(6));
+        goalBarContainer.setLayoutParams(containerParams);
+        goalBarContainer.setBackground(barBg);
+
+        // Fill da barra
+        goalProgressFill = new View(getContext());
+        GradientDrawable fillBg = new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{ Color.parseColor("#6D28D9"), Color.parseColor("#C084FC") }
+        );
+        fillBg.setCornerRadius(dp(10));
+        goalProgressFill.setBackground(fillBg);
+        FrameLayout.LayoutParams fillParams = new FrameLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT);
+        goalProgressFill.setLayoutParams(fillParams);
+
+        goalBarContainer.addView(goalProgressFill);
+
+        // Monta tudo
         inner.addView(topRow);
         inner.addView(profitText);
         inner.addView(statsText);
+        inner.addView(divider);
+        inner.addView(goalRow);
+        inner.addView(goalBarContainer);
         overlayView.addView(inner);
 
+        // Renderiza valores iniciais
         updateView(netProfit, margin, profitPerKm);
+        updateGoalViews();
 
         // ── WindowManager params ──
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -208,7 +281,7 @@ public class OverlayPlugin extends Plugin {
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
         params = new WindowManager.LayoutParams(
-                dp(210),
+                dp(220),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
@@ -227,8 +300,8 @@ public class OverlayPlugin extends Plugin {
             public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        initialX     = params.x;
-                        initialY     = params.y;
+                        initialX      = params.x;
+                        initialY      = params.y;
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
                         return true;
@@ -245,6 +318,8 @@ public class OverlayPlugin extends Plugin {
         windowManager.addView(overlayView, params);
     }
 
+    // ── Render helpers ──────────────────────────────────────────────
+
     private void updateView(double netProfit, double margin, double profitPerKm) {
         if (profitText == null) return;
 
@@ -256,24 +331,52 @@ public class OverlayPlugin extends Plugin {
 
         if (margin >= 30) {
             badgeText.setText("ELITE ★");
-            badgeBg.setColor(Color.parseColor("#059669")); // verde esmeralda
+            badgeBg.setColor(Color.parseColor("#059669"));
         } else if (margin >= 15) {
             badgeText.setText("OK ●");
-            badgeBg.setColor(Color.parseColor("#D97706")); // âmbar
+            badgeBg.setColor(Color.parseColor("#D97706"));
         } else {
             badgeText.setText("BAIXO ▼");
-            badgeBg.setColor(Color.parseColor("#DC2626")); // vermelho
+            badgeBg.setColor(Color.parseColor("#DC2626"));
         }
+
+        updateGoalViews();
+    }
+
+    /** Atualiza a seção de Meta Diária no overlay */
+    private void updateGoalViews() {
+        if (goalRemainingText == null || goalProgressFill == null) return;
+
+        double remaining = Math.max(dailyGoal - dailyAccumulated, 0);
+        double pct       = dailyGoal > 0
+                           ? Math.min(dailyAccumulated / dailyGoal, 1.0)
+                           : 0;
+
+        goalRemainingText.setText(String.format("R$ %.2f", remaining).replace('.', ','));
+
+        // Atualiza largura da barra de progresso
+        goalProgressFill.post(() -> {
+            View parent = (View) goalProgressFill.getParent();
+            if (parent != null) {
+                int totalWidth = parent.getWidth();
+                int fillWidth  = (int)(totalWidth * pct);
+                FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) goalProgressFill.getLayoutParams();
+                lp.width = fillWidth;
+                goalProgressFill.setLayoutParams(lp);
+            }
+        });
     }
 
     private void removeOverlay() {
         if (overlayView != null && windowManager != null) {
             try { windowManager.removeView(overlayView); } catch (Exception ignored) {}
-            overlayView = null;
-            profitText  = null;
-            statsText   = null;
-            badgeText   = null;
-            badgeBg     = null;
+            overlayView        = null;
+            profitText         = null;
+            statsText          = null;
+            badgeText          = null;
+            badgeBg            = null;
+            goalRemainingText  = null;
+            goalProgressFill   = null;
         }
     }
 
