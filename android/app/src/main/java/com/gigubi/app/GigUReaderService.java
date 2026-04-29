@@ -134,7 +134,7 @@ public class GigUReaderService extends AccessibilityService {
                     } catch (Exception e) {
                         Log.e(TAG, "Erro no delay: " + e.getMessage());
                     }
-                }, 200);
+                }, 500);
             } else {
                 processWindowRoot(eventRoot, event.getEventType());
                 if (eventRoot != sourceRoot) eventRoot.recycle();
@@ -261,14 +261,14 @@ public class GigUReaderService extends AccessibilityService {
         String fullText = sb.toString().trim();
         
         if (fullText.isEmpty()) {
-            Log.d(TAG, "processWindowRoot abortado: [vazio] pkg=" + pkg + " class=" + root.getClassName() + " type=" + eventType);
+            Log.d(TAG, "processWindowRoot abortado: [vazio] pkg=" + pkg + " class=" + root.getClassName() + " children=" + root.getChildCount());
             return;
         }
 
         // Diagnóstico especial: Se for SystemUI ou 99/Uber, vamos logar TUDO se tiver qualquer pista
         String low = fullText.toLowerCase();
         if (pkg != null && (pkg.toString().contains("systemui") || pkg.toString().contains("app99") || pkg.toString().contains("ubercab"))) {
-            if (low.contains("99") || low.contains("uber") || low.contains("r$") || low.contains("km")) {
+            if (low.contains("99") || low.contains("uber") || low.contains("r$") || low.contains("km") || low.contains("aceitar")) {
                 Log.d(TAG, "INSPEÇÃO [" + pkg + "]: " + fullText);
             }
         }
