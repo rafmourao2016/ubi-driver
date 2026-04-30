@@ -92,7 +92,7 @@ public class GigUReaderService extends AccessibilityService {
                 Log.d(TAG, "Notificação detectada! Resetando throttle e aguardando 800ms...");
                 lastOcrTime = 0; // RESET: Permite OCR imediato para esta nova oferta
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    triggerOcr();
+                    triggerOcr(false);
                 }, 800);
             }
             return;
