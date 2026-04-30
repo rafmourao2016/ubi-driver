@@ -330,13 +330,17 @@ public class GigUReaderService extends AccessibilityService {
             .trim();
 
         if (cleanText.isEmpty()) {
-            Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
-            
-            // Tenta OCR com "FORCE" se a tela parecer travada/vazia (Uber ou 99)
+            // Se for Uber ou 99, NÃO abortamos se tiver filhos — pode ser uma nova camada protegida
             String pkgStr = pkg != null ? pkg.toString() : "";
-            if (pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("uber")) {
-                triggerOcr(true); // true = bypass throttle parcial
+            boolean isTarget = pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("uber");
+            
+            if (isTarget && root.getChildCount() > 0) {
+                Log.d(TAG, "Janela Alvo detectada sem texto acessível. Forçando OCR.");
+                triggerOcr(true);
+                return;
             }
+
+            Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             return;
         }
 
@@ -447,7 +451,12 @@ public class GigUReaderService extends AccessibilityService {
     }
 
     private void extractAllText(AccessibilityNodeInfo node, StringBuilder sb) {
-        if (node == null) return;
+        extractAllTextRecursive(node, sb, new int[]{0});
+    }
+
+    private void extractAllTextRecursive(AccessibilityNodeInfo node, StringBuilder sb, int[] nodeCount) {
+        if (node == null || nodeCount[0] > 500) return; // Limite de 500 nós para evitar ANR
+        nodeCount[0]++;
 
         CharSequence className = node.getClassName();
         CharSequence text = node.getText();
@@ -477,7 +486,7 @@ public class GigUReaderService extends AccessibilityService {
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child != null) {
-                extractAllText(child, sb);
+                extractAllTextRecursive(child, sb, nodeCount);
                 child.recycle();
             }
         }
@@ -788,6 +797,11 @@ public class GigUReaderService extends AccessibilityService {
                         screenshotResult.getColorSpace()
                     );
                     
+                    // CRÍTICO: Fecha o HardwareBuffer para evitar Memory Leak (Piscadas na tela)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        screenshotResult.getHardwareBuffer().close();
+                    }
+                    
                     if (bitmap == null) {
                         Log.e(TAG, "OCR FALHOU: bitmap null");
                         return;
@@ -825,9 +839,12 @@ public class GigUReaderService extends AccessibilityService {
                     String resultText = visionText.getText();
                     String lowText = resultText.toLowerCase();
                     
-                    // Validação rigorosa: só aceita se tiver km, min e r$ juntos
-                    if (!lowText.contains("km") || !lowText.contains("min") || !lowText.contains("r$")) {
-                        Log.d(TAG, "OCR descartado - incompleto.");
+                    // Validação mais flexível: pelo menos Preço (R$) E algum dado de distância/tempo
+                    boolean temPreco = lowText.contains("r$") || lowText.contains("p$") || lowText.contains("$");
+                    boolean temDados = lowText.contains("km") || lowText.contains("min") || lowText.contains("mt") || lowText.contains("mi");
+
+                    if (!temPreco || !temDados) {
+                        Log.d(TAG, "OCR descartado - dados insuficientes para cálculo.");
                         return;
                     }
 
