@@ -67,6 +67,8 @@ public class GigUReaderService extends AccessibilityService {
     // Rastreia pacotes já logados para não poluir o log (1 entrada por pacote por 5s)
     private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
     private String lastCapturedText = "";
+    private long lastOcrTime = 0;
+    private static final long OCR_THROTTLE_MS = 10000; // 10 segundos entre prints
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -639,6 +641,13 @@ public class GigUReaderService extends AccessibilityService {
             Log.w(TAG, "OCR não suportado (Requer Android 11+)");
             return;
         }
+
+        long now = System.currentTimeMillis();
+        if (now - lastOcrTime < OCR_THROTTLE_MS) {
+            Log.d(TAG, "OCR ignorado (throttled)");
+            return;
+        }
+        lastOcrTime = now;
 
         // Evita disparar OCR na tela de "Várias solicitações recusadas"
         if (lastCapturedText.contains("solicita") && lastCapturedText.contains("recusadas")) {
