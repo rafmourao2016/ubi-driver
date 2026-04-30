@@ -41,7 +41,8 @@ public class GigUReaderService extends AccessibilityService {
 
     private static final long ACCUMULATION_WINDOW_MS = 5000;
     private static final long EMIT_THROTTLE_MS = 2000;
-    private static final long IDLE_CLEAR_MS    = 8000; // Reduzido de 30s para 8s
+    private static final long IDLE_CLEAR_MS    = 8000;
+    private static final double MIN_PRICE_THRESHOLD = 5.00; // Piso de R$ 5,00
 
     private static final Pattern PRICE_PATTERN = Pattern.compile(
         "R\\$[\\s\u00A0]*(\\d+(?:[.,]\\d+)?)"
@@ -336,12 +337,23 @@ public class GigUReaderService extends AccessibilityService {
 
         // Detecção de "Volta ao Mapa" - Se vir palavras do mapa, limpa o overlay
         String lowClean = cleanText.toLowerCase();
-        if (lowClean.contains("onde vamos") || lowClean.contains("pesquisar") || lowClean.contains("procurar") || lowClean.contains("para onde")) {
-            Log.d(TAG, "[MAPA] Detectado retorno ao mapa. Limpando overlay.");
+        if (lowClean.contains("onde vamos") || lowClean.contains("pesquisar") || lowClean.contains("procurar") || lowClean.contains("para onde") || lowClean.contains("buscando")) {
+            Log.d(TAG, "[MAPA] Detectado retorno ao mapa ou status 'Buscando'. Limpando overlay.");
             OverlayPlugin overlay = OverlayPlugin.getInstance();
             if (overlay != null) overlay.clearOverlay();
             accumPrice = 0; accumKm = 0;
             return;
+        }
+
+        // 1. Blacklist de contexto: ignora preços de gasolina/postos
+        cleanText = cleanText
+            .replaceAll("(?i)99 Abastece.*", "")
+            .replaceAll("(?i)Posto.*", "")
+            .replaceAll("(?i)Combustív.*", "");
+
+        // 2. Exigência de contexto de corrida: só aceita se tiver km ou min ou Aceitar
+        if (!lowClean.contains("km") && !lowClean.contains("min") && !lowClean.contains("aceitar")) {
+            return; 
         }
 
         Log.d(TAG, "FULL_TEXT: " + fullText);
@@ -559,7 +571,8 @@ public class GigUReaderService extends AccessibilityService {
         Matcher pm = PRICE_PATTERN.matcher(cleanText);
         while (pm.find()) {
             double p = parseDouble(pm.group(1));
-            if (p > 1 && p < 500) {
+            // 3. Preço mínimo de R$ 5,00
+            if (p >= MIN_PRICE_THRESHOLD && p < 500) {
                 if (p > info.price) info.price = p;
                 info.hasPrice = true;
                 found = true;
@@ -669,8 +682,7 @@ public class GigUReaderService extends AccessibilityService {
             // Esconde o overlay nativamente
             GigUPlugin.hideOverlayNative();
             
-            // Delay de 300ms para garantir que o overlay sumiu da tela antes do print
-            // Aumentado de 150ms para 300ms para dar tempo do sistema Xiaomi processar o GONE
+            // Xiaomi Vaccine: espera um pouco mais (500ms) para o overlay sumir do print
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                 Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
                     ? getMainExecutor() 

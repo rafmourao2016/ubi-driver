@@ -197,7 +197,8 @@ public class GigUPlugin extends Plugin {
 
         Log.d("GigUPlugin", "[" + source + "] Extraído: R$" + price + " | " + km + "km | " + time + "min");
 
-        if (price > 0 && km > 0) {
+        // 3. Preço mínimo de R$ 5,00 (ignora posto de gasolina R$4,06 etc)
+        if (price >= 5.00 && km > 0) {
             emitOfferReceived(rawText, price, km, time, 1.0);
         } else {
             // Se falhou e veio da Notificação, pode sinalizar para tentar OCR
