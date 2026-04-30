@@ -50,7 +50,7 @@ public class GigUReaderService extends AccessibilityService {
     private static final Pattern SURGE_PATTERN = Pattern.compile(
         "(?:[^\\d]|^)([1-5][.,]\\d)x", Pattern.CASE_INSENSITIVE);
     private static final Pattern DISTANCE_PATTERN = Pattern.compile(
-        "\\(?([\\d]+(?:[.,]\\d+)?)\\s*(km|m)\\)?",
+        "\\(?([\\d]+(?:[.,]\\d+)?)\\s*(km|m)\\b\\)?",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -629,11 +629,11 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
         
-        // Exemplo: 1,1x ou *1,1x
+        // Exemplo: 1,1x ou *1,1x (Trava estrita: 1.1 a 4.9)
         Matcher sm = SURGE_PATTERN.matcher(rawText);
         while (sm.find()) {
             double s = parseDouble(sm.group(1));
-            if (s > 1.0 && s <= 5.0) {
+            if (s >= 1.1 && s <= 4.9) {
                 info.surgeMultiplier = s;
                 info.surge = s;
                 found = true;
