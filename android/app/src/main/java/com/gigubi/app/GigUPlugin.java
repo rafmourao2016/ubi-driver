@@ -163,6 +163,13 @@ public class GigUPlugin extends Plugin {
     public void processRawText(String rawText, String pkg, String source) {
         if (rawText == null || rawText.isEmpty()) return;
 
+        // VACINA: Ignora se o texto parece vir do nosso próprio overlay
+        // Isso evita "eco" e cálculos errados baseados no que nós mesmos escrevemos na tela
+        if (rawText.contains("UBI") || rawText.contains("margem") || rawText.contains("Faltam")) {
+            Log.d("GigUPlugin", "[FILTRO] Texto do overlay ignorado para evitar eco.");
+            return;
+        }
+
         double price = 0;
         double km = 0;
         double time = 0;

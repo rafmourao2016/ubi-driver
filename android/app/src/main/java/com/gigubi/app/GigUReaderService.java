@@ -661,7 +661,8 @@ public class GigUReaderService extends AccessibilityService {
             // Esconde o overlay nativamente
             GigUPlugin.hideOverlayNative();
             
-            // Delay de 150ms para garantir que o overlay sumiu da tela antes do print
+            // Delay de 300ms para garantir que o overlay sumiu da tela antes do print
+            // Aumentado de 150ms para 300ms para dar tempo do sistema Xiaomi processar o GONE
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                 Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
                     ? getMainExecutor() 
