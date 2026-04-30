@@ -69,7 +69,7 @@ public class GigUReaderService extends AccessibilityService {
     private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
     private String lastCapturedText = "";
     private long lastOcrTime = 0;
-    private static final long OCR_THROTTLE_MS = 3000; // Reduzido para 3 segundos
+    private static final long OCR_THROTTLE_MS = 5000;
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -305,12 +305,7 @@ public class GigUReaderService extends AccessibilityService {
         if (cleanText.isEmpty()) {
             Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             
-            // NOVIDADE: Se for 99 ou Uber e estiver vazio (mesmo com overlay), tenta OCR!
-            String pkgStr = pkg != null ? pkg.toString() : "";
-            if (pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("systemui")) {
-                Log.d(TAG, "Janela vazia detectada. Disparando OCR...");
-                triggerOcr();
-            }
+            // OCR automático removido aqui para evitar travamentos por loop infinito
             return;
         }
 
@@ -623,10 +618,7 @@ public class GigUReaderService extends AccessibilityService {
 
     /** Emite log de diagnóstico para o UI do app */
     private void notifyDiag(String msg) {
-        // Silenciado para deixar o app limpo
-        // GigUPlugin plugin = GigUPlugin.getInstance();
-        // if (plugin == null) return;
-        // plugin.sendDiagLog(msg);
+        // Silenciado para performance
     }
 
     /**
