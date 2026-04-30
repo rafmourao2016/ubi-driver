@@ -198,7 +198,7 @@ public class GigUPlugin extends Plugin {
         // Atualiza overlay nativo
         OverlayPlugin overlay = OverlayPlugin.getInstance();
         if (overlay != null) {
-            overlay.updateFromService(netProfit, margin, profitPerKm);
+            overlay.updateFromService(netProfit, margin, profitPerKm, km);
         } else {
             // JSObject logEvt2 = new JSObject();
             // logEvt2.put("msg", "[ERRO] OverlayPlugin null — overlay não está ativo");

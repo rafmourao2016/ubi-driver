@@ -112,14 +112,14 @@ public class OverlayPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    public void updateFromService(double netProfit, double margin, double profitPerKm) {
+    public void updateFromService(double netProfit, double margin, double profitPerKm, double km) {
         if (Math.abs(netProfit - lastRenderedProfit) < 0.05
                 && Math.abs(margin - lastRenderedMargin) < 0.5) return;
         lastRenderedProfit = netProfit;
         lastRenderedMargin = margin;
         if (getActivity() == null) return;
         getActivity().runOnUiThread(() -> {
-            if (overlayView != null) updateView(netProfit, margin, profitPerKm);
+            if (overlayView != null) updateView(netProfit, margin, profitPerKm, km);
         });
     }
 
@@ -329,13 +329,13 @@ public class OverlayPlugin extends Plugin {
 
     // ── Render helpers ──────────────────────────────────────────────
 
-    private void updateView(double netProfit, double margin, double profitPerKm) {
+    private void updateView(double netProfit, double margin, double profitPerKm, double km) {
         if (profitText == null) return;
 
         profitText.setTextSize(30);
         profitText.setText(String.format("R$ %.2f", netProfit).replace('.', ','));
         statsText.setText(
-            String.format("%.1f%% margem  ·  R$%.2f/km", margin, profitPerKm).replace('.', ',')
+            String.format("%.1f km  ·  %.1f%% margem  ·  R$%.2f/km", km, margin, profitPerKm).replace('.', ',')
         );
 
         if (margin >= 30) {
