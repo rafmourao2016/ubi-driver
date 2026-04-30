@@ -267,6 +267,7 @@ public class GigUReaderService extends AccessibilityService {
                     accumPrice = 0;
                     accumKm = 0;
                     accumTimeMin = 0;
+                    lastEmitTime = 0; // RESET: Permite que a PRÓXIMA corrida seja emitida na hora
                     lastEmittedHash = "";
  // Reseta o hash para permitir novas ofertas iguais depois de um tempo
             }
@@ -349,6 +350,7 @@ public class GigUReaderService extends AccessibilityService {
             OverlayPlugin overlay = OverlayPlugin.getInstance();
             if (overlay != null) overlay.clearOverlay();
             accumPrice = 0; accumKm = 0;
+            lastEmitTime = 0; // RESET: Permite emissão imediata da próxima oferta
             return;
         }
 
@@ -358,8 +360,8 @@ public class GigUReaderService extends AccessibilityService {
             .replaceAll("(?i)Posto.*", "")
             .replaceAll("(?i)Combustív.*", "");
 
-        // 2. Exigência de contexto de corrida: só aceita se tiver km ou min ou Aceitar
-        if (!lowClean.contains("km") && !lowClean.contains("min") && !lowClean.contains("aceitar")) {
+        // 2. Exigência de contexto de corrida: só aceita se tiver km ou min ou Aceitar/Selecionar
+        if (!lowClean.contains("km") && !lowClean.contains("min") && !lowClean.contains("aceitar") && !lowClean.contains("selecionar")) {
             return; 
         }
 
