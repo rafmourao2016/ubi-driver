@@ -77,14 +77,6 @@ public class GigUReaderService extends AccessibilityService {
         String pkg = event.getPackageName() != null ? event.getPackageName().toString() : "";
         if (pkg.isEmpty()) return;
 
-        // ── Diagnóstico: loga TODOS os pacotes (1x por 5s) ──
-        long nowLog = System.currentTimeMillis();
-        Long lastLog = loggedPkgs.get(pkg);
-        if (lastLog == null || nowLog - lastLog > 5000) {
-            loggedPkgs.put(pkg, nowLog);
-            notifyDiag("[APP] " + pkg + " | tipo: " + event.getEventType());
-            Log.d(TAG, "[PKG_ALL] " + pkg + " | tipo: " + event.getEventType());
-        }
 
         // ── 0) Caso especial: Notificações (Heads-up) ──
         if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
@@ -124,7 +116,6 @@ public class GigUReaderService extends AccessibilityService {
         if (eventIs99 || activeIs99)     currentAppIsUber = false;
 
         Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
-        notifyDiag("[✓ UBER/99] " + pkg + " tipo:" + event.getEventType());
 
         long now = System.currentTimeMillis();
         if (now - firstEventTime > ACCUMULATION_WINDOW_MS) {
@@ -624,9 +615,10 @@ public class GigUReaderService extends AccessibilityService {
 
     /** Emite log de diagnóstico para o UI do app */
     private void notifyDiag(String msg) {
-        GigUPlugin plugin = GigUPlugin.getInstance();
-        if (plugin == null) return;
-        plugin.sendDiagLog(msg);
+        // Silenciado para deixar o app limpo
+        // GigUPlugin plugin = GigUPlugin.getInstance();
+        // if (plugin == null) return;
+        // plugin.sendDiagLog(msg);
     }
 
     /**

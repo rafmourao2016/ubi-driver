@@ -69,14 +69,6 @@ public class GigUPlugin extends Plugin {
      * (overlay, vibração, cálculo) sem precisar receber corrida real.
      * Parâmetros opcionais: price (padrão 18.50), km (padrão 7.2)
      */
-    @PluginMethod
-    public void simulateOffer(PluginCall call) {
-        double price = call.getDouble("price", 18.50);
-        double km    = call.getDouble("km", 7.2);
-        Log.i("GigUPlugin", "[SIMULAÇÃO] Disparando oferta fake: R$" + price + " | " + km + " km");
-        emitOfferReceived("SIMULAÇÃO", price, km, 0.0, 1.0);
-        call.resolve();
-    }
 
 
     /** Verifica se as duas permissões foram concedidas */
@@ -247,20 +239,20 @@ public class GigUPlugin extends Plugin {
         double margin      = price > 0 ? (netProfit / price) * 100.0 : 0;
         double profitPerKm = km > 0 ? netProfit / km : 0;
 
-        // Emite log de diagnóstico para o UI
-        JSObject logEvt = new JSObject();
-        logEvt.put("msg", String.format("[OFERTA] R$%.2f | %.1fkm | %.1fmin | Surge %.1fx | Lucro: R$%.2f (%.0f%%)",
-            price, km, timeMin, surge, netProfit, margin));
-        notifyListeners("onDiagLog", logEvt);
+        // Emite log de diagnóstico para o UI (silenciado)
+        // JSObject logEvt = new JSObject();
+        // logEvt.put("msg", String.format("[OFERTA] R$%.2f | %.1fkm | %.1fmin | Surge %.1fx | Lucro: R$%.2f (%.0f%%)",
+        //     price, km, timeMin, surge, netProfit, margin));
+        // notifyListeners("onDiagLog", logEvt);
 
         // Atualiza overlay nativo
         OverlayPlugin overlay = OverlayPlugin.getInstance();
         if (overlay != null) {
             overlay.updateFromService(netProfit, margin, profitPerKm);
         } else {
-            JSObject logEvt2 = new JSObject();
-            logEvt2.put("msg", "[ERRO] OverlayPlugin null — overlay não está ativo");
-            notifyListeners("onDiagLog", logEvt2);
+            // JSObject logEvt2 = new JSObject();
+            // logEvt2.put("msg", "[ERRO] OverlayPlugin null — overlay não está ativo");
+            // notifyListeners("onDiagLog", logEvt2);
         }
 
         triggerFeedback(margin);
