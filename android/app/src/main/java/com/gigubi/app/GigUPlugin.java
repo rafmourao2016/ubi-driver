@@ -77,13 +77,20 @@ public class GigUPlugin extends Plugin {
         Log.d("GigUPlugin", "checkPermissions chamado");
         boolean hasOverlay      = Settings.canDrawOverlays(getContext());
         boolean hasAccessibility = isAccessibilityServiceEnabled();
-        boolean hasNotification = isNotificationServiceEnabled();
-        boolean isRunning       = GigUReaderService.getInstance() != null;
+        boolean hasListener      = isNotificationServiceEnabled();
+        
+        boolean hasPostNotification = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            hasPostNotification = getContext().checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) 
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        }
+
+        boolean isRunning = GigUReaderService.getInstance() != null;
 
         JSObject ret = new JSObject();
         ret.put("overlayGranted", hasOverlay);
         ret.put("accessibilityGranted", hasAccessibility);
-        ret.put("notificationGranted", hasNotification);
+        ret.put("notificationGranted", hasListener && hasPostNotification); // Precisa dos dois
         ret.put("serviceRunning", isRunning);
         call.resolve(ret);
     }
@@ -124,12 +131,21 @@ public class GigUPlugin extends Plugin {
         call.resolve();
     }
 
-    /** Abre a tela de 'Acesso a Notificações' */
+    /** Abre a tela de 'Acesso a Notificações' (Configurações do Sistema) */
     @PluginMethod
     public void openNotificationSettings(PluginCall call) {
         Intent intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);
+        call.resolve();
+    }
+
+    /** Solicita a permissão POST_NOTIFICATIONS em tempo de execução (Android 13+) */
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getActivity().requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
+        }
         call.resolve();
     }
 

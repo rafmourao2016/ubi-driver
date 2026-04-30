@@ -71,7 +71,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   const handleNotification = async () => {
     const plugin = getPlugin();
-    if (plugin) await plugin.openNotificationSettings();
+    if (plugin) {
+      await plugin.requestNotificationPermission();
+      // Delay pequeno para não encavalar o pop-up com a abertura da tela de config
+      setTimeout(async () => {
+        await plugin.openNotificationSettings();
+      }, 500);
+    }
   };
 
   const allDone = perms.overlayGranted && perms.accessibilityGranted && perms.notificationGranted;
