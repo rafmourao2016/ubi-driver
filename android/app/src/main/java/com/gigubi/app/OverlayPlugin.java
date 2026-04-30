@@ -334,20 +334,26 @@ public class OverlayPlugin extends Plugin {
     private void updateView(double netProfit, double margin, double profitPerKm, double km) {
         if (profitText == null) return;
 
+        String profitStr = String.format("R$ %.2f", netProfit).replace('.', ',');
         profitText.setTextSize(30);
-        profitText.setText(String.format("R$ %.2f", netProfit).replace('.', ','));
-        statsText.setText(
-            String.format("%.1f km  ·  %.1f%% margem  ·  R$%.2f/km", km, margin, profitPerKm).replace('.', ',')
-        );
+        profitText.setText(profitStr);
+        profitText.setContentDescription("Lucro líquido estimado de " + profitStr);
+
+        String statsStr = String.format("%.1f km  ·  %.1f%% margem  ·  R$%.2f/km", km, margin, profitPerKm).replace('.', ',');
+        statsText.setText(statsStr);
+        statsText.setContentDescription(String.format("Distância %.1f quilômetros, margem de lucro de %.0f por cento, rendimento de %.2f reais por quilômetro", km, margin, profitPerKm).replace('.', ','));
 
         if (margin >= 30) {
             badgeText.setText("ELITE ★");
+            badgeText.setContentDescription("Classificação Elite: Alta lucratividade");
             badgeBg.setColor(Color.parseColor("#059669"));
         } else if (margin >= 15) {
             badgeText.setText("OK ●");
+            badgeText.setContentDescription("Classificação OK: Lucratividade média");
             badgeBg.setColor(Color.parseColor("#D97706"));
         } else {
             badgeText.setText("BAIXO ▼");
+            badgeText.setContentDescription("Classificação Baixa: Pouco lucro");
             badgeBg.setColor(Color.parseColor("#DC2626"));
         }
 
@@ -363,7 +369,9 @@ public class OverlayPlugin extends Plugin {
                            ? Math.min(dailyAccumulated / dailyGoal, 1.0)
                            : 0;
 
-        goalRemainingText.setText(String.format("R$ %.2f", remaining).replace('.', ','));
+        String remainingStr = String.format("R$ %.2f", remaining).replace('.', ',');
+        goalRemainingText.setText(remainingStr);
+        goalRemainingText.setContentDescription("Faltam " + remainingStr + " para atingir a meta diária");
 
         // Atualiza largura da barra de progresso
         goalProgressFill.post(() -> {
@@ -374,6 +382,7 @@ public class OverlayPlugin extends Plugin {
                 FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) goalProgressFill.getLayoutParams();
                 lp.width = fillWidth;
                 goalProgressFill.setLayoutParams(lp);
+                goalProgressFill.setContentDescription(String.format("Progresso da meta: %.0f por cento concluído", pct * 100));
             }
         });
     }
