@@ -594,6 +594,10 @@ public class GigUReaderService extends AccessibilityService {
             .replaceAll("\\d+,\\d+%%\\s*margem[^\\n]*", "")
             .replaceAll("R\\$0,00", "")
             .replaceAll("R\\$[\\s\u00A0]*\\d+[.,]\\d+\\s*/\\s*km", ""); // remove preço/km
+
+        // Normaliza O maiúsculo antes de números (OCR confunde O com 0)
+        // Ex: "O3min" -> "03min"
+        ocrClean = ocrClean.replaceAll("(?<=[^a-zA-Z])O(?=\\d)", "0");
         
         // 2. Busca o PRIMEIRO preço válido entre R$5 e R$200
         Matcher pm = PRICE_PATTERN.matcher(ocrClean);
@@ -608,23 +612,25 @@ public class GigUReaderService extends AccessibilityService {
         }
         
         // 3. Distâncias
-        Matcher dm = DISTANCE_PATTERN.matcher(rawText);
+        Matcher dm = DISTANCE_PATTERN.matcher(ocrClean);
         while (dm.find()) {
             double d = parseDouble(dm.group(1));
             String unit = dm.group(2).toLowerCase().trim();
             double km = unit.equals("m") ? d / 1000.0 : d;
-            if (km > 0.2 && km < 100) {
+            if (km > 0.05 && km < 100) {
                 info.distances.add(km);
+                if (info.km == 0) info.km = km; // Povoa o campo km principal
                 found = true;
             }
         }
         
-        // Exemplo: 9min
-        Matcher tm = Pattern.compile("(\\d+)\\s*(?:min)").matcher(rawText);
+        // 4. Tempo (Ex: 03min)
+        Matcher tm = Pattern.compile("(\\d+)\\s*(?:min)").matcher(ocrClean);
         while (tm.find()) {
             double t = parseDouble(tm.group(1));
             if (t > 0 && t < 200) {
                 info.times.add(t);
+                if (info.timeMin == 0) info.timeMin = t; // Povoa o campo principal
                 found = true;
             }
         }
