@@ -748,74 +748,88 @@ public class GigUReaderService extends AccessibilityService {
         }
     }
 
+    private final android.os.Handler debounceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable pendingOcrRunnable = null;
+
     public void triggerOcr(boolean isForced) {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
-            Log.w(TAG, "OCR não suportado (Requer Android 11+)");
-            return;
-        }
+        if (isProcessingOcr) return;
 
         long now = System.currentTimeMillis();
         long throttle = isForced ? OCR_FORCE_MS : OCR_THROTTLE_MS;
-        
-        if (now - lastOcrTime < throttle) {
-            return;
+        if (now - lastOcrTime < throttle) return;
+
+        // --- IMPLEMENTAÇÃO DE DEBOUNCE ---
+        // Se já tinha um pedido de OCR agendado, cancelamos e agendamos um novo.
+        // Isso garante que o OCR só rode após a tela "parar" por 1 segundo.
+        if (pendingOcrRunnable != null) {
+            debounceHandler.removeCallbacks(pendingOcrRunnable);
         }
-        
-        isProcessingOcr = true; // Bloqueia novos pedidos
-        lastOcrTime = now;
-        
-        Log.d(TAG, "Iniciando OCR (forced=" + isForced + ")...");
-        
-        // Esconde overlay antes do print para não sujar o OCR
-        OverlayPlugin overlay = OverlayPlugin.getInstance();
-        if (overlay != null) overlay.setOverlayVisibility(false);
 
-        // Atraso de 150ms para garantir que o Android limpou a tela do overlay
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-            try {
-                takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
-                    @Override
-                    public void onSuccess(ScreenshotResult screenshotResult) {
-                        // Volta o overlay imediatamente após o print
-                        if (overlay != null) overlay.setOverlayVisibility(true);
-                        
-                        try {
-                            Bitmap bitmap = Bitmap.wrapHardwareBuffer(
-                                screenshotResult.getHardwareBuffer(),
-                                screenshotResult.getColorSpace()
-                            );
+        pendingOcrRunnable = () -> {
+            if (isProcessingOcr) return;
+            isProcessingOcr = true;
+            lastOcrTime = System.currentTimeMillis();
+            
+            Log.d(TAG, "Iniciando OCR Otimizado (forced=" + isForced + ")...");
+            
+            OverlayPlugin overlay = OverlayPlugin.getInstance();
+            if (overlay != null) overlay.setOverlayVisibility(false);
+
+            debounceHandler.postDelayed(() -> {
+                try {
+                    takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
+                        @Override
+                        public void onSuccess(ScreenshotResult screenshotResult) {
+                            if (overlay != null) overlay.setOverlayVisibility(true);
                             
-                            // CRÍTICO: Fecha o HardwareBuffer para evitar Memory Leak (Piscadas na tela)
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                screenshotResult.getHardwareBuffer().close();
+                            try {
+                                Bitmap fullBitmap = Bitmap.wrapHardwareBuffer(
+                                    screenshotResult.getHardwareBuffer(),
+                                    screenshotResult.getColorSpace()
+                                );
+                                
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                    screenshotResult.getHardwareBuffer().close();
+                                }
+                                
+                                if (fullBitmap == null) {
+                                    isProcessingOcr = false;
+                                    return;
+                                }
+
+                                // --- SMART CROPPING (Área Delimitada) ---
+                                // As ofertas ficam na metade de baixo. Cortamos os 60% inferiores.
+                                int height = fullBitmap.getHeight();
+                                int width = fullBitmap.getWidth();
+                                int startY = (int) (height * 0.4); // Pula os 40% do topo (mapa/status)
+                                int cropHeight = height - startY;
+
+                                Bitmap croppedBitmap = Bitmap.createBitmap(fullBitmap, 0, startY, width, cropHeight);
+                                fullBitmap.recycle(); // Libera a tela cheia imediatamente
+
+                                Log.d(TAG, "OCR Cropped: " + width + "x" + cropHeight);
+                                processBitmapWithOcr(croppedBitmap);
+                                
+                            } catch (Exception e) {
+                                Log.e(TAG, "Erro OCR Crop: " + e.getMessage());
+                                isProcessingOcr = false;
                             }
-                            
-                            if (bitmap == null) {
-                                Log.e(TAG, "OCR FALHOU: bitmap null");
-                                isProcessingOcr = false; // Libera
-                                return;
-                            }
-                            Log.d(TAG, "OCR bitmap: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-                            processBitmapWithOcr(bitmap);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Erro ao processar screenshot: " + e.getMessage());
-                            isProcessingOcr = false; // Libera
                         }
-                    }
 
-                    @Override
-                    public void onFailure(int i) {
-                        Log.e(TAG, "Falha ao tirar Screenshot: " + i);
-                        if (overlay != null) overlay.setOverlayVisibility(true);
-                        isProcessingOcr = false; // Libera
-                    }
-                });
-            } catch (Exception e) {
-                if (overlay != null) overlay.setOverlayVisibility(true);
-                isProcessingOcr = false; // Libera
-                Log.e(TAG, "ERRO CRÍTICO ao tirar screenshot: " + e.getMessage());
-            }
-        }, 150);
+                        @Override
+                        public void onFailure(int i) {
+                            if (overlay != null) overlay.setOverlayVisibility(true);
+                            isProcessingOcr = false;
+                        }
+                    });
+                } catch (Exception e) {
+                    if (overlay != null) overlay.setOverlayVisibility(true);
+                    isProcessingOcr = false;
+                }
+            }, 150);
+        };
+
+        debounceHandler.postDelayed(pendingOcrRunnable, 1000); // Aguarda 1s de inatividade
     }
 
     private void processBitmapWithOcr(Bitmap bitmap) {
