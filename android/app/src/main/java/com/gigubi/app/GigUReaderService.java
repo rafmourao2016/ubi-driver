@@ -68,7 +68,7 @@ public class GigUReaderService extends AccessibilityService {
     private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
     private String lastCapturedText = "";
     private long lastOcrTime = 0;
-    private static final long OCR_THROTTLE_MS = 10000; // 10 segundos entre prints
+    private static final long OCR_THROTTLE_MS = 3000; // Reduzido para 3 segundos
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -295,14 +295,20 @@ public class GigUReaderService extends AccessibilityService {
         extractAllText(root, sb);
         String fullText = sb.toString().trim();
         this.lastCapturedText = fullText;
-        
-        if (fullText.isEmpty()) {
-            Log.d(TAG, "processWindowRoot abortado: [vazio] pkg=" + pkg + " class=" + root.getClassName() + " children=" + root.getChildCount());
+
+        String cleanText = fullText.replace("UBI", "")
+            .replace("margem", "")
+            .replace("Faltam", "")
+            .replace("ELITE", "")
+            .trim();
+
+        if (cleanText.isEmpty()) {
+            Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             
-            // NOVIDADE: Se for 99 ou Uber e estiver vazio, tenta OCR imediatamente!
+            // NOVIDADE: Se for 99 ou Uber e estiver vazio (mesmo com overlay), tenta OCR!
             String pkgStr = pkg != null ? pkg.toString() : "";
-            if (pkgStr.contains("app99") || pkgStr.contains("ubercab")) {
-                Log.d(TAG, "Janela vazia detectada no app de transporte. Disparando OCR...");
+            if (pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("systemui")) {
+                Log.d(TAG, "Janela vazia detectada. Disparando OCR...");
                 triggerOcr();
             }
             return;
