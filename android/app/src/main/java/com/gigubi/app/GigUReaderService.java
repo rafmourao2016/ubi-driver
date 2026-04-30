@@ -40,7 +40,7 @@ public class GigUReaderService extends AccessibilityService {
     public static GigUReaderService getInstance() { return instance; }
 
     private static final long ACCUMULATION_WINDOW_MS = 5000;
-    private static final long EMIT_THROTTLE_MS = 2000;
+    private static final long EMIT_THROTTLE_MS = 8000;
     private static final long IDLE_CLEAR_MS    = 8000;
     private static final double MIN_PRICE_THRESHOLD = 5.00; // Piso de R$ 5,00
 
@@ -258,10 +258,15 @@ public class GigUReaderService extends AccessibilityService {
         idleTimer.schedule(new TimerTask() {
             @Override public void run() {
                 Log.d(TAG, "[IDLE] 8s sem oferta");
-                OverlayPlugin overlay = OverlayPlugin.getInstance();
-                if (overlay != null) overlay.clearOverlay();
-                accumPrice = 0; accumKm = 0; firstEventTime = 0;
-                lastEmittedHash = ""; // Reseta o hash para permitir novas ofertas iguais depois de um tempo
+                    GigUPlugin plugin = GigUPlugin.getInstance();
+                    if (plugin != null) {
+                        plugin.hideOverlayNative();
+                    }
+                    accumPrice = 0;
+                    accumKm = 0;
+                    accumTimeMin = 0;
+                    lastEmittedHash = "";
+ // Reseta o hash para permitir novas ofertas iguais depois de um tempo
             }
         }, IDLE_CLEAR_MS);
     }
@@ -617,6 +622,7 @@ public class GigUReaderService extends AccessibilityService {
         Log.i(TAG, ">>> EMITINDO: R$" + price + " | " + km + " km | " + timeMin + " min | Surge " + surge + "x");
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin != null) {
+            plugin.showOverlayNative(); // Garante que o overlay apareça quando há corrida
             plugin.emitOfferReceived("Offer", price, km, timeMin, surge);
             lastEmitTime = System.currentTimeMillis();
             accumPrice = 0; accumKm = 0; accumTimeMin = 0; accumSurge = 1.0; firstEventTime = 0;
@@ -710,7 +716,7 @@ public class GigUReaderService extends AccessibilityService {
                         GigUPlugin.showOverlayNative();
                     }
                 });
-            }, 150);
+            }, 500);
 
         } catch (Exception e) {
             Log.e(TAG, "ERRO CRÍTICO ao tentar screenshot: " + e.getMessage());
