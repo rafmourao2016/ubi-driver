@@ -314,12 +314,21 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
 
-        // ── Guard de Conteúdo Relaxado ──
+        // ── Guard de Relevância Inteligente ──
         String lowerFull = fullText.toLowerCase();
-        boolean hasPrice = lowerFull.contains("r$");
         
-        if (!hasPrice) {
-            // Se NÃO tem preço e é o mapa, limpamos
+        // 1. Blacklist de Telas Conhecidas (Menu Uber, Offline, etc)
+        if (fullText.contains("Página inicial") || fullText.contains("Você está offline") || fullText.contains("Pesquisar locais")) {
+            return;
+        }
+
+        // 2. Só aceita se tiver Preço REAL (>0) E dados de corrida (km e min)
+        boolean temPrecoReal = fullText.matches(".*R\\$[\\s\u00A0]*[1-9]\\d*[.,]\\d+.*");
+        boolean temKm = lowerFull.contains("km");
+        boolean temMin = lowerFull.contains("min");
+
+        if (!temPrecoReal || !temKm || !temMin) {
+            // Se NÃO tem os dados, mas é o mapa, limpamos
             if (lowerFull.contains("onde vamos") || lowerFull.contains("para onde") || lowerFull.contains("procurar")) {
                 OverlayPlugin overlay = OverlayPlugin.getInstance();
                 if (overlay != null) overlay.clearOverlay();
