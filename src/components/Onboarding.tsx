@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 interface PermState {
   overlayGranted: boolean;
   accessibilityGranted: boolean;
+  notificationGranted: boolean;
 }
 
 interface OnboardingProps {
@@ -19,7 +20,11 @@ function getPlugin() {
 }
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
-  const [perms, setPerms] = useState<PermState>({ overlayGranted: false, accessibilityGranted: false });
+  const [perms, setPerms] = useState<PermState>({ 
+    overlayGranted: false, 
+    accessibilityGranted: false,
+    notificationGranted: false 
+  });
   const [checking, setChecking] = useState(false);
 
   const checkPerms = useCallback(async () => {
@@ -33,7 +38,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       setChecking(true);
       const result = await plugin.checkPermissions();
       setPerms(result);
-      if (result.overlayGranted && result.accessibilityGranted) {
+      if (result.overlayGranted && result.accessibilityGranted && result.notificationGranted) {
         onComplete();
       }
     } catch (_) {
@@ -64,7 +69,12 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     if (plugin) await plugin.openAccessibilitySettings();
   };
 
-  const bothDone = perms.overlayGranted && perms.accessibilityGranted;
+  const handleNotification = async () => {
+    const plugin = getPlugin();
+    if (plugin) await plugin.openNotificationSettings();
+  };
+
+  const allDone = perms.overlayGranted && perms.accessibilityGranted && perms.notificationGranted;
 
   const steps = [
     {
@@ -84,6 +94,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       granted: perms.accessibilityGranted,
       onPress: handleAccessibility,
       hint: 'Procure por "Ubi Driver" na lista e ative',
+    },
+    {
+      id: 'notification',
+      emoji: '🔔',
+      title: 'Acesso a Notificações',
+      description: 'Permite monitorar notificações de ofertas quando o app está em segundo plano.',
+      granted: perms.notificationGranted,
+      onPress: handleNotification,
+      hint: 'Ative o interruptor para o "Ubi Driver"',
     },
   ];
 
@@ -195,7 +214,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
           color: '#6b7280', padding: '10px 24px', borderRadius: 99,
           fontFamily: 'Outfit, sans-serif', fontWeight: 700, fontSize: '0.75rem',
-          cursor: 'pointer', marginBottom: bothDone ? 16 : 0,
+          cursor: 'pointer', marginBottom: allDone ? 16 : 0,
           letterSpacing: '0.05em',
         }}
       >
@@ -203,7 +222,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       </button>
 
       {/* Enter button when all done */}
-      {bothDone && (
+      {allDone && (
         <button
           onClick={onComplete}
           style={{

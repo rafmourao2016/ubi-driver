@@ -422,7 +422,7 @@ public class GigUReaderService extends AccessibilityService {
         
         // Diagnóstico profundo para 99/Uber
         CharSequence nodePkg = node.getPackageName();
-        if (nodePkg != null && (nodePkg.toString().contains("app99") || nodePkg.toString().contains("ubercab"))) {
+        if (nodePkg != null && BuildConfig.DEBUG && (nodePkg.toString().contains("app99") || nodePkg.toString().contains("ubercab"))) {
             Log.d(TAG, "[TREE] " + className + " | Text: " + text + " | Desc: " + desc + " | Children: " + node.getChildCount());
         }
 
@@ -760,6 +760,9 @@ public class GigUReaderService extends AccessibilityService {
                     }
                     Log.d(TAG, "OCR bitmap: " + bitmap.getWidth() + "x" + bitmap.getHeight());
                     processBitmapWithOcr(bitmap);
+                    
+                    // Libera memória imediatamente após o processamento
+                    bitmap.recycle();
                 }
 
                 @Override
