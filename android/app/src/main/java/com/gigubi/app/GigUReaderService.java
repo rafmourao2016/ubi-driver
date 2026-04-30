@@ -773,7 +773,7 @@ public class GigUReaderService extends AccessibilityService {
         // Atraso de 150ms para garantir que o Android limpou a tela do overlay
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
             try {
-                takeScreenshot(Display.DEFAULT_DISPLAY, getExecutor(), new TakeScreenshotCallback() {
+                takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
                     @Override
                     public void onSuccess(ScreenshotResult screenshotResult) {
                         // Volta o overlay imediatamente após o print
