@@ -611,29 +611,33 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
         
-        // 3. Distâncias
+        // 3. Distâncias (SOMA TODOS OS TRECHOS)
         Matcher dm = DISTANCE_PATTERN.matcher(ocrClean);
+        double totalKmFound = 0;
         while (dm.find()) {
             double d = parseDouble(dm.group(1));
             String unit = dm.group(2).toLowerCase().trim();
             double km = unit.equals("m") ? d / 1000.0 : d;
             if (km > 0.05 && km < 100) {
                 info.distances.add(km);
-                if (info.km == 0) info.km = km; // Povoa o campo km principal
+                totalKmFound += km;
                 found = true;
             }
         }
+        info.km = totalKmFound;
         
-        // 4. Tempo (Ex: 03min)
+        // 4. Tempo (Ex: 03min) (SOMA TODOS OS TRECHOS)
         Matcher tm = Pattern.compile("(\\d+)\\s*(?:min)").matcher(ocrClean);
+        double totalTimeFound = 0;
         while (tm.find()) {
             double t = parseDouble(tm.group(1));
             if (t > 0 && t < 200) {
                 info.times.add(t);
-                if (info.timeMin == 0) info.timeMin = t; // Povoa o campo principal
+                totalTimeFound += t;
                 found = true;
             }
         }
+        info.timeMin = totalTimeFound;
         
         // Exemplo: 1,1x ou *1,1x (Trava estrita: 1.1 a 4.9)
         Matcher sm = SURGE_PATTERN.matcher(rawText);
