@@ -4,7 +4,6 @@ import React, { useMemo, useEffect, useState } from 'react';
 import { calculateProfit } from '../lib/calculations';
 import { useSync } from '../hooks/useSync';
 import PiPMode from './PiPMode';
-import PiPMode from './PiPMode';
 
 export default function Calculator() {
   const { data: input, setData: setInput, syncData, loading, lastSynced } = useSync({
