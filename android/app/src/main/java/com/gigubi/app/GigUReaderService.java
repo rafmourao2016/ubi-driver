@@ -40,8 +40,8 @@ public class GigUReaderService extends AccessibilityService {
     public static GigUReaderService getInstance() { return instance; }
 
     private static final long ACCUMULATION_WINDOW_MS = 5000;
-    private static final long EMIT_THROTTLE_MS = 3000;
-    private static final long IDLE_CLEAR_MS = 30_000;
+    private static final long EMIT_THROTTLE_MS = 2000;
+    private static final long IDLE_CLEAR_MS    = 8000; // Reduzido de 30s para 8s
 
     private static final Pattern PRICE_PATTERN = Pattern.compile(
         "R\\$[\\s\u00A0]*(\\d+(?:[.,]\\d+)?)"
@@ -265,7 +265,7 @@ public class GigUReaderService extends AccessibilityService {
         idleTimer = new Timer();
         idleTimer.schedule(new TimerTask() {
             @Override public void run() {
-                Log.d(TAG, "[IDLE] 30s sem oferta");
+                Log.d(TAG, "[IDLE] 8s sem oferta");
                 OverlayPlugin overlay = OverlayPlugin.getInstance();
                 if (overlay != null) overlay.clearOverlay();
                 accumPrice = 0; accumKm = 0; firstEventTime = 0;
@@ -340,6 +340,16 @@ public class GigUReaderService extends AccessibilityService {
                 // Se for outro app mas tiver alguma keyword, vamos logar pra ver
                 Log.d(TAG, "[SKIP] Quase passou. hasPrice=" + hasPrice + " | Pkg: " + pkg + " | TEXTO: " + fullText);
             }
+            return;
+        }
+
+        // Detecção de "Volta ao Mapa" - Se vir palavras do mapa, limpa o overlay
+        String lowClean = cleanText.toLowerCase();
+        if (lowClean.contains("onde vamos") || lowClean.contains("pesquisar") || lowClean.contains("procurar") || lowClean.contains("para onde")) {
+            Log.d(TAG, "[MAPA] Detectado retorno ao mapa. Limpando overlay.");
+            OverlayPlugin overlay = OverlayPlugin.getInstance();
+            if (overlay != null) overlay.clearOverlay();
+            accumPrice = 0; accumKm = 0;
             return;
         }
 
@@ -549,11 +559,11 @@ public class GigUReaderService extends AccessibilityService {
         return false;
     }
 
-    private boolean extractByRegex(String fullText, RideInfo info) {
+    private boolean extractByRegex(String rawText, RideInfo info) {
         boolean found = false;
         
         // Ignorar preço por km (ex: R$2,23/km) para não confundir com o preço total
-        String cleanText = fullText.replaceAll("R\\\\$[\\\\s\u00A0]*\\\\d+[.,]\\\\d+\\\\s*/\\\\s*km", "");
+        String cleanText = rawText.replaceAll("R\\$[\\s\u00A0]*\\d+[.,]\\d+\\s*/\\s*km", "");
         
         Matcher pm = PRICE_PATTERN.matcher(cleanText);
         while (pm.find()) {
@@ -565,7 +575,7 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
         
-        Matcher dm = DISTANCE_PATTERN.matcher(fullText);
+        Matcher dm = DISTANCE_PATTERN.matcher(rawText);
         while (dm.find()) {
             double d = parseDouble(dm.group(1));
             String unit = dm.group(2).toLowerCase().trim();
@@ -577,7 +587,7 @@ public class GigUReaderService extends AccessibilityService {
         }
         
         // Exemplo: 9min
-        Matcher tm = Pattern.compile("(\\d+)\\s*(?:min)").matcher(fullText);
+        Matcher tm = Pattern.compile("(\\d+)\\s*(?:min)").matcher(rawText);
         while (tm.find()) {
             double t = parseDouble(tm.group(1));
             if (t > 0 && t < 200) {
@@ -587,7 +597,7 @@ public class GigUReaderService extends AccessibilityService {
         }
         
         // Exemplo: 1,1x
-        Matcher sm = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*[xX]").matcher(fullText);
+        Matcher sm = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*[xX]").matcher(rawText);
         while (sm.find()) {
             double s = parseDouble(sm.group(1));
             if (s > 1.0 && s <= 5.0) {
@@ -595,7 +605,7 @@ public class GigUReaderService extends AccessibilityService {
                 found = true;
             }
         }
-
+        
         return found;
     }
 

@@ -178,6 +178,21 @@ public class GigUPlugin extends Plugin {
         if (pm.find()) price = parseDouble(pm.group(1));
 
         Matcher dm = DISTANCE_PATTERN.matcher(rawText);
+        // Pre-carrega o primeiro km para o sanity check se existir
+        double firstKm = 0;
+        if (dm.find()) {
+            double d = parseDouble(dm.group(1));
+            String unit = dm.group(2).toLowerCase();
+            firstKm = unit.equals("m") ? d / 1000.0 : d;
+            dm.reset(); // Reseta para o loop while não perder o primeiro valor
+        }
+
+        // SANITY CHECK: Se o preço for > 200 e o primeiro km for muito baixo/zero, ignoramos
+        if (price > 200 && firstKm <= 0.1) {
+            Log.d("GigUPlugin", "[SANITY] Preço suspeito ignorado: R$" + price + " com " + firstKm + "km");
+            return;
+        }
+
         while (dm.find()) {
             double d = parseDouble(dm.group(1));
             String unit = dm.group(2).toLowerCase();
