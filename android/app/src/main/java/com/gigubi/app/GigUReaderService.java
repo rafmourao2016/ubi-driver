@@ -586,20 +586,26 @@ public class GigUReaderService extends AccessibilityService {
     private boolean extractByRegex(String rawText, RideInfo info) {
         boolean found = false;
         
-        // Ignorar preço por km (ex: R$2,23/km) para não confundir com o preço total
-        String cleanText = rawText.replaceAll("R\\$[\\s\u00A0]*\\d+[.,]\\d+\\s*/\\s*km", "");
+        // 1. Limpeza rigorosa: remove nosso próprio overlay e lixo antes de rodar o regex
+        String ocrClean = rawText
+            .replaceAll("(?i)faltam\\s*R\\$[\\s\\d.,]+", "")
+            .replaceAll("(?i)margem\\s*R\\$[\\s\\d.,]+", "")
+            .replaceAll("R\\$0,00", "")
+            .replaceAll("R\\$[\\s\u00A0]*\\d+[.,]\\d+\\s*/\\s*km", ""); // remove preço/km
         
-        Matcher pm = PRICE_PATTERN.matcher(cleanText);
+        // 2. Busca o PRIMEIRO preço válido entre R$5 e R$200
+        Matcher pm = PRICE_PATTERN.matcher(ocrClean);
         while (pm.find()) {
             double p = parseDouble(pm.group(1));
-            // 3. Preço mínimo de R$ 5,00
-            if (p >= MIN_PRICE_THRESHOLD && p < 500) {
-                if (p > info.price) info.price = p;
+            if (p >= 5.0 && p <= 200.0 && !info.hasPrice) {
+                info.price = p;
                 info.hasPrice = true;
                 found = true;
+                break; // Para no primeiro válido
             }
         }
         
+        // 3. Distâncias
         Matcher dm = DISTANCE_PATTERN.matcher(rawText);
         while (dm.find()) {
             double d = parseDouble(dm.group(1));
