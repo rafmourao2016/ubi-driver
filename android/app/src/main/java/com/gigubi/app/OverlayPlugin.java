@@ -138,6 +138,15 @@ public class OverlayPlugin extends Plugin {
         });
     }
 
+    public void setOverlayVisibility(boolean visible) {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            if (overlayView != null) {
+                overlayView.setVisibility(visible ? View.VISIBLE : View.GONE);
+            }
+        });
+    }
+
     // ── Overlay Construction ────────────────────────────────────────
 
     private void createOverlay(double netProfit, double margin, double profitPerKm) {

@@ -98,7 +98,16 @@ export default function Calculator() {
   };
 
   const handleResetDay = () => {
-    if (confirm('Zerar os ganhos de hoje? 🌅')) setDailyAccumulated(0);
+    if (confirm('Zerar os ganhos de hoje? 🌅')) {
+      setDailyAccumulated(0);
+      setInput(prev => ({ ...prev, grossEarnings: 0, distanceKm: 0 }));
+      localStorage.removeItem('ubi_daily_acc');
+      // Também reseta o overlay se estiver ativo
+      if (typeof window !== 'undefined' && (window as any).Capacitor) {
+        const plugin = (window as any).Capacitor.Plugins.OverlayPlugin;
+        if (plugin?.clearOverlay) plugin.clearOverlay();
+      }
+    }
   };
 
   const syncDataWithDaily = async () => {

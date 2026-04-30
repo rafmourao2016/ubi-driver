@@ -638,36 +638,51 @@ public class GigUReaderService extends AccessibilityService {
             return;
         }
 
+        // Evita disparar OCR na tela de "Várias solicitações recusadas"
+        if (lastFullText.contains("solicita") && lastFullText.contains("recusadas")) {
+            Log.d(TAG, "Tela de aviso detectada. Ignorando OCR.");
+            return;
+        }
+
         Log.d(TAG, "Iniciando captura de tela para OCR...");
         
         try {
-            Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
-                ? getMainExecutor() 
-                : new Executor() {
-                    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-                    @Override public void execute(Runnable r) { handler.post(r); }
-                };
+            // Esconde o overlay nativamente
+            GigUPlugin.hideOverlayNative();
+            
+            // Delay de 150ms para garantir que o overlay sumiu da tela antes do print
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
+                    ? getMainExecutor() 
+                    : r -> new android.os.Handler(android.os.Looper.getMainLooper()).post(r);
 
-            takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
-                @Override
-                public void onSuccess(ScreenshotResult screenshotResult) {
-                    Bitmap bitmap = Bitmap.wrapHardwareBuffer(
-                        screenshotResult.getHardwareBuffer(),
-                        screenshotResult.getColorSpace()
-                    );
-                    
-                    if (bitmap != null) {
-                        processBitmapWithOcr(bitmap);
+                takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
+                    @Override
+                    public void onSuccess(ScreenshotResult screenshotResult) {
+                        Bitmap bitmap = Bitmap.wrapHardwareBuffer(
+                            screenshotResult.getHardwareBuffer(),
+                            screenshotResult.getColorSpace()
+                        );
+                        
+                        // Volta o overlay imediatamente
+                        GigUPlugin.showOverlayNative();
+                        
+                        if (bitmap != null) {
+                            processBitmapWithOcr(bitmap);
+                        }
                     }
-                }
 
-                @Override
-                public void onFailure(int errorCode) {
-                    Log.e(TAG, "Falha ao capturar screenshot: " + errorCode);
-                }
-            });
+                    @Override
+                    public void onFailure(int errorCode) {
+                        Log.e(TAG, "Falha ao capturar screenshot: " + errorCode);
+                        GigUPlugin.showOverlayNative();
+                    }
+                });
+            }, 150);
+
         } catch (Exception e) {
             Log.e(TAG, "ERRO CRÍTICO ao tentar screenshot: " + e.getMessage());
+            GigUPlugin.showOverlayNative();
         }
     }
 

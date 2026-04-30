@@ -308,6 +308,16 @@ public class GigUPlugin extends Plugin {
             return null;
         }
     }
+
+    public static void showOverlayNative() {
+        OverlayPlugin op = OverlayPlugin.getInstance();
+        if (op != null) op.setOverlayVisibility(true);
+    }
+
+    public static void hideOverlayNative() {
+        OverlayPlugin op = OverlayPlugin.getInstance();
+        if (op != null) op.setOverlayVisibility(false);
+    }
 }
 
 
