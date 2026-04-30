@@ -50,7 +50,7 @@ public class GigUReaderService extends AccessibilityService {
     private static final Pattern SURGE_PATTERN = Pattern.compile(
         "(?:[^\\d]|^)([1-5][.,]\\d)x", Pattern.CASE_INSENSITIVE);
     private static final Pattern DISTANCE_PATTERN = Pattern.compile(
-        "(\\d+(?:[.,]\\d+)?)[\\s\u00A0]*(km|m)\\b",
+        "\\(?([\\d]+(?:[.,]\\d+)?)\\s*(km|m)\\)?",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -588,8 +588,10 @@ public class GigUReaderService extends AccessibilityService {
         
         // 1. Limpeza rigorosa: remove nosso próprio overlay e lixo antes de rodar o regex
         String ocrClean = rawText
-            .replaceAll("(?i)faltam\\s*R\\$[\\s\\d.,]+", "")
-            .replaceAll("(?i)margem\\s*R\\$[\\s\\d.,]+", "")
+            .replaceAll("(?i)faltam[^\\n]*", "")
+            .replaceAll("(?i)margem[^\\n]*", "")
+            .replaceAll("(?i)UBI[^\\n]*", "")
+            .replaceAll("\\d+,\\d+%%\\s*margem[^\\n]*", "")
             .replaceAll("R\\$0,00", "")
             .replaceAll("R\\$[\\s\u00A0]*\\d+[.,]\\d+\\s*/\\s*km", ""); // remove preço/km
         
