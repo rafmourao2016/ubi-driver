@@ -362,6 +362,15 @@ public class GigUReaderService extends AccessibilityService {
         boolean temMin = lowerFull.contains("min");
 
         if (!temPrecoReal || !temKm || !temMin) {
+            // Caso Especial: Se for a tela de "Aguardando corridas" ou Home, é um estado válido de 0.0
+            if (lowerFull.contains("aguardando") || lowerFull.contains("página inicial") || lowerFull.contains("você está online")) {
+                Log.d(TAG, "Estado: Ocioso (Aguardando corridas)");
+                OverlayPlugin overlay = OverlayPlugin.getInstance();
+                if (overlay != null) overlay.clearOverlay();
+                accumPrice = 0; accumKm = 0; lastEmitTime = 0;
+                return; // NÃO dispara OCR aqui, é ocioso
+            }
+
             // Se NÃO tem os dados, mas é o mapa, limpamos
             if (lowerFull.contains("onde vamos") || lowerFull.contains("para onde") || lowerFull.contains("procurar")) {
                 OverlayPlugin overlay = OverlayPlugin.getInstance();
@@ -785,9 +794,6 @@ public class GigUReaderService extends AccessibilityService {
                     }
                     Log.d(TAG, "OCR bitmap: " + bitmap.getWidth() + "x" + bitmap.getHeight());
                     processBitmapWithOcr(bitmap);
-                    
-                    // Libera memória imediatamente após o processamento
-                    bitmap.recycle();
                 }
 
                 @Override
@@ -815,24 +821,25 @@ public class GigUReaderService extends AccessibilityService {
 
         recognizer.process(image)
             .addOnSuccessListener(visionText -> {
-                String resultText = visionText.getText();
-                Log.d(TAG, "OCR SUCESSO: " + resultText.length() + " chars");
-                String lowText = resultText.toLowerCase();
-                
-                // Validação rigorosa: só aceita se tiver km, min e r$ juntos
-                if (!lowText.contains("km") || !lowText.contains("min") || !lowText.contains("r$")) {
-                    Log.d(TAG, "OCR descartado - não parece um cartão de corrida completo.");
-                    return;
-                }
+                try {
+                    String resultText = visionText.getText();
+                    String lowText = resultText.toLowerCase();
+                    
+                    // Validação rigorosa: só aceita se tiver km, min e r$ juntos
+                    if (!lowText.contains("km") || !lowText.contains("min") || !lowText.contains("r$")) {
+                        Log.d(TAG, "OCR descartado - incompleto.");
+                        return;
+                    }
 
-                Log.d(TAG, "OCR RESULT (VALIDADO): " + resultText);
-                GigUPlugin plugin = GigUPlugin.getInstance();
-                if (plugin != null) {
-                    plugin.processRawText(resultText, "unknown", "OCR");
+                    Log.d(TAG, "OCR SUCESSO (VALIDADO): " + resultText.length() + " chars");
+                    processRawTextOcr(resultText);
+                } finally {
+                    bitmap.recycle(); // Recicla sempre que terminar o processamento
                 }
             })
             .addOnFailureListener(e -> {
-                Log.e(TAG, "OCR FALHOU: " + e.getMessage());
+                Log.e(TAG, "OCR Falhou: " + e.getMessage());
+                bitmap.recycle(); // Garante a reciclagem mesmo em falha
             });
     }
 
