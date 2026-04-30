@@ -646,7 +646,9 @@ public class GigUReaderService extends AccessibilityService {
             
             // Correção automática de vírgula perdida: 13x -> 1.3x
             if (s >= 10 && s < 50) {
+                double oldS = s;
                 s = s / 10.0;
+                Log.d(TAG, "[SURGE_FIX] Corrigido de " + oldS + " para " + s);
             }
             
             if (s >= 1.1 && s <= 4.9) {
@@ -660,11 +662,14 @@ public class GigUReaderService extends AccessibilityService {
     }
 
     private void emitOffer(double price, double km, double timeMin, double surge) {
-        Log.i(TAG, ">>> EMITINDO: R$" + price + " | " + km + " km | " + timeMin + " min | Surge " + surge + "x");
+        // Arredonda km para 1 casa decimal para o overlay (ex: 3.48 -> 3.5)
+        double roundedKm = Math.round(km * 10.0) / 10.0;
+        
+        Log.i(TAG, ">>> EMITINDO: R$" + price + " | " + roundedKm + " km | " + timeMin + " min | Surge " + surge + "x");
         GigUPlugin plugin = GigUPlugin.getInstance();
         if (plugin != null) {
             plugin.showOverlayNative(); // Garante que o overlay apareça quando há corrida
-            plugin.emitOfferReceived("Offer", price, km, timeMin, surge);
+            plugin.emitOfferReceived("Offer", price, roundedKm, timeMin, surge);
             lastEmitTime = System.currentTimeMillis();
             accumPrice = 0; accumKm = 0; accumTimeMin = 0; accumSurge = 1.0; firstEventTime = 0;
         } else {
