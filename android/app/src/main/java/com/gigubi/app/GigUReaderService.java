@@ -18,7 +18,9 @@ import android.util.DisplayMetrics;
 import android.content.Intent;
 import android.view.Display;
 import android.view.WindowManager;
+import android.widget.Toast;
 
+import com.gigubi.app.BuildConfig;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
