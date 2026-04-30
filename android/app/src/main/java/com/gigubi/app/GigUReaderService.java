@@ -720,9 +720,12 @@ public class GigUReaderService extends AccessibilityService {
                         screenshotResult.getColorSpace()
                     );
                     
-                    if (bitmap != null) {
-                        processBitmapWithOcr(bitmap);
+                    if (bitmap == null) {
+                        Log.e(TAG, "OCR FALHOU: bitmap null");
+                        return;
                     }
+                    Log.d(TAG, "OCR bitmap: " + bitmap.getWidth() + "x" + bitmap.getHeight());
+                    processBitmapWithOcr(bitmap);
                 }
 
                 @Override
@@ -745,6 +748,7 @@ public class GigUReaderService extends AccessibilityService {
         recognizer.process(image)
             .addOnSuccessListener(visionText -> {
                 String resultText = visionText.getText();
+                Log.d(TAG, "OCR SUCESSO: " + resultText.length() + " chars");
                 String lowText = resultText.toLowerCase();
                 
                 // Validação rigorosa: só aceita se tiver km, min e r$ juntos
@@ -760,7 +764,7 @@ public class GigUReaderService extends AccessibilityService {
                 }
             })
             .addOnFailureListener(e -> {
-                Log.e(TAG, "Erro no OCR: " + e.getMessage());
+                Log.e(TAG, "OCR FALHOU: " + e.getMessage());
             });
     }
 
