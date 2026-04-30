@@ -323,49 +323,32 @@ public class GigUReaderService extends AccessibilityService {
         }
 
         // ── Guard de Conteúdo ──
-        // Só processa se parecer um cartão de corrida real (R$ E Palavra de contexto)
         String lowerFull = fullText.toLowerCase();
         boolean hasPrice = lowerFull.contains("r$");
         boolean hasRideKeyword = lowerFull.contains("aceitar") 
+            || lowerFull.contains("selecionar")
+            || lowerFull.contains("viagem")
+            || lowerFull.contains("distância")
             || lowerFull.contains("pagamento")
-            || lowerFull.contains("dinheiro")
             || lowerFull.contains("km")
             || lowerFull.contains("min");
 
         if (!hasPrice || !hasRideKeyword) {
-            // Se for do app99 ou uber, vamos logar o texto completo para diagnosticar pq falhou
-            if (pkg != null && (pkg.toString().contains("app99") || pkg.toString().contains("ubercab"))) {
-                Log.d(TAG, "[SKIP] 99/Uber Relevância falhou. hasPrice=" + hasPrice + " | TEXTO: " + fullText);
-            } else if (hasPrice || hasRideKeyword) {
-                // Se for outro app mas tiver alguma keyword, vamos logar pra ver
-                Log.d(TAG, "[SKIP] Quase passou. hasPrice=" + hasPrice + " | Pkg: " + pkg + " | TEXTO: " + fullText);
+            // Se NÃO tem preço e é o mapa (Onde vamos?), aí sim limpamos
+            if (lowerFull.contains("onde vamos") || lowerFull.contains("para onde") || lowerFull.contains("procurar")) {
+                Log.d(TAG, "[MAPA] Detectado retorno ao mapa (sem preço). Limpando overlay.");
+                OverlayPlugin overlay = OverlayPlugin.getInstance();
+                if (overlay != null) overlay.clearOverlay();
+                accumPrice = 0; accumKm = 0; lastEmitTime = 0;
             }
             return;
         }
 
-        // Detecção de "Volta ao Mapa" - Se vir palavras do mapa, limpa o overlay
-        String lowClean = cleanText.toLowerCase();
-        if (lowClean.contains("onde vamos") || lowClean.contains("pesquisar") || lowClean.contains("procurar") || lowClean.contains("para onde")) {
-            Log.d(TAG, "[MAPA] Detectado retorno ao mapa. Limpando overlay.");
-            OverlayPlugin overlay = OverlayPlugin.getInstance();
-            if (overlay != null) overlay.clearOverlay();
-            accumPrice = 0; accumKm = 0;
-            lastEmitTime = 0; // RESET: Permite emissão imediata da próxima oferta
-            return;
-        }
-
         // 1. Blacklist de contexto: ignora preços de gasolina/postos
-        cleanText = cleanText
+        String cleanText2 = fullText
             .replaceAll("(?i)99 Abastece.*", "")
             .replaceAll("(?i)Posto.*", "")
             .replaceAll("(?i)Combustív.*", "");
-
-        // 2. Exigência de contexto de corrida: mais palavras-chave para garantir que não perca nada
-        if (!lowClean.contains("km") && !lowClean.contains("min") && !lowClean.contains("aceitar") && 
-            !lowClean.contains("selecionar") && !lowClean.contains("viagem") && !lowClean.contains("distância") &&
-            !lowClean.contains("embarque")) {
-            return; 
-        }
 
         Log.d(TAG, "FULL_TEXT: " + fullText);
 
@@ -380,7 +363,7 @@ public class GigUReaderService extends AccessibilityService {
             notifyDiag("[INFO] Extracting: " + pkg.toString());
         }
 
-        RideInfo info = extractRideInfo(root, fullText);
+        RideInfo info = extractRideInfo(root, cleanText2);
         if (info != null) {
             if (info.hasPrice && info.price > accumPrice) {
                 accumPrice = info.price;
