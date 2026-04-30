@@ -727,10 +727,14 @@ public class GigUReaderService extends AccessibilityService {
 
         Log.d(TAG, "Iniciando captura de tela para OCR...");
         
+        // --- PISCADA DE SEGURANÇA ---
+        // Esconde o overlay antes do print para não sujar o OCR
+        OverlayPlugin overlay = OverlayPlugin.getInstance();
+        if (overlay != null) {
+            overlay.setOverlayVisibility(false);
+        }
+
         try {
-            // REMOVIDO: GigUPlugin.hideOverlayNative(); 
-            // Agora mantemos o overlay fixo para não piscar. O filtro de texto cuida do resto.
-            
             Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
                 ? getMainExecutor() 
                 : r -> new android.os.Handler(android.os.Looper.getMainLooper()).post(r);
@@ -738,6 +742,11 @@ public class GigUReaderService extends AccessibilityService {
             takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
                 @Override
                 public void onSuccess(ScreenshotResult screenshotResult) {
+                    // Volta o overlay imediatamente após o print
+                    if (overlay != null) {
+                        overlay.setOverlayVisibility(true);
+                    }
+
                     Bitmap bitmap = Bitmap.wrapHardwareBuffer(
                         screenshotResult.getHardwareBuffer(),
                         screenshotResult.getColorSpace()
@@ -753,13 +762,18 @@ public class GigUReaderService extends AccessibilityService {
 
                 @Override
                 public void onFailure(int errorCode) {
+                    // Volta o overlay mesmo em falha
+                    if (overlay != null) {
+                        overlay.setOverlayVisibility(true);
+                    }
                     Log.e(TAG, "Falha ao capturar screenshot: " + errorCode);
                 }
             });
 
         } catch (Exception e) {
+            // Garante volta do overlay em erro crítico
+            if (overlay != null) overlay.setOverlayVisibility(true);
             Log.e(TAG, "ERRO CRÍTICO ao tentar screenshot: " + e.getMessage());
-            GigUPlugin.showOverlayNative();
         }
     }
 
