@@ -73,7 +73,10 @@ public class GigUReaderService extends AccessibilityService {
     private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
     private String lastCapturedText = "";
     private long lastOcrTime = 0;
-    private static final long OCR_THROTTLE_MS = 5000;
+    private static final long OCR_THROTTLE_MS = 1500; // 1.5s entre prints
+    private static final long OCR_FORCE_MS    = 600;  // 0.6s se a UI estiver vazia
+
+    private final Executor processingExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -179,28 +182,23 @@ public class GigUReaderService extends AccessibilityService {
         }
 
         // ── 3) Janelas extras — Todas exceto teclado ──
-        // Lembrete: Nós já temos um filtro de texto no processNode para ignorar
-        // nossa própria overlay ('Faltam', 'Simulador'), então é seguro ler TYPE_SYSTEM
-        // ── 3) Janelas extras — Todas exceto teclado ──
         try {
             List<AccessibilityWindowInfo> windows = getWindows();
             if (windows != null) {
                 for (AccessibilityWindowInfo window : windows) {
                     if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
                     if (window.getId() == eventWindowId) continue;
-                    AccessibilityNodeInfo root = window.getRoot();
-                    if (root == null) {
-                        // Log.d(TAG, "Window root null id=" + window.getId());
-                        continue;
-                    }
                     
-                    // Trace de janela (ajuda a descobrir nomes de pacotes ocultos)
-                    CharSequence wPkg = root.getPackageName();
-                    if (wPkg != null && (eventIsUber || eventIs99)) {
-                        Log.d(TAG, "Window Trace: " + wPkg.toString() + " id=" + window.getId());
-                    }
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root == null) continue;
 
-                    processWindowRoot(root, event.getEventType());
+                    // Priorização: Se a janela é Uber/99, processamos primeiro e podemos até ignorar o resto
+                    CharSequence wPkg = root.getPackageName();
+                    boolean isTarget = wPkg != null && (wPkg.toString().contains("app99") || wPkg.toString().contains("ubercab"));
+                    
+                    if (isTarget) {
+                        processWindowRoot(root, event.getEventType());
+                    }
                     root.recycle();
                 }
             }
@@ -334,10 +332,10 @@ public class GigUReaderService extends AccessibilityService {
         if (cleanText.isEmpty()) {
             Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             
-            // Tenta OCR se a tela parecer travada/vazia (Uber ou 99)
+            // Tenta OCR com "FORCE" se a tela parecer travada/vazia (Uber ou 99)
             String pkgStr = pkg != null ? pkg.toString() : "";
             if (pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("uber")) {
-                triggerOcr();
+                triggerOcr(true); // true = bypass throttle parcial
             }
             return;
         }
@@ -392,27 +390,51 @@ public class GigUReaderService extends AccessibilityService {
             notifyDiag("[INFO] Extracting: " + pkg.toString());
         }
 
-        RideInfo info = extractRideInfo(root, cleanText2);
-        if (info != null) {
-            if (info.hasPrice && info.price > accumPrice) {
-                accumPrice = info.price;
-                Log.d(TAG, "  -> Preço: R$" + info.price + " [" + info.layerUsed + "]");
-            }
-            for (Double d : info.distances) {
-                if (d > 0.2 && !eventKmList.contains(d)) {
-                    eventKmList.add(d);
-                    Log.d(TAG, "  -> Km parcial: " + d + " [" + info.layerUsed + "]");
+        // Camadas 1 e 2: Precisam do 'root' (nó), então DEVEM rodar na Main Thread (são rápidas)
+        RideInfo info = new RideInfo();
+        boolean foundInLayers12 = extractByViewId(root, info) || extractByAnchor(root, info);
+
+        // Se já achou dados vitais nas camadas rápidas, podemos seguir. 
+        // Se não, a Camada 3 (Regex) é a mais pesada e será processada em background.
+        final String finalCleanText = cleanText2;
+        final RideInfo finalInfo = info;
+        final boolean finalFoundInLayers12 = foundInLayers12;
+
+        processingExecutor.execute(() -> {
+            RideInfo result = finalInfo;
+            if (!finalFoundInLayers12) {
+                // Camada 3: Regex sobre o texto completo (Puramente String, seguro em background)
+                if (extractByRegex(finalCleanText, result)) {
+                    result.layerUsed = "Regex (BG)";
                 }
             }
-            for (Double t : info.times) {
-                if (t > 0 && !eventTimeList.contains(t)) {
-                    eventTimeList.add(t);
+
+            if (result.hasPrice && result.price > 0) {
+                synchronized (this) {
+                    if (result.price > accumPrice) {
+                        accumPrice = result.price;
+                        Log.d(TAG, "  -> Preço: R$" + result.price + " [" + result.layerUsed + "]");
+                    }
+                    for (Double d : result.distances) {
+                        if (d > 0.2 && !eventKmList.contains(d)) {
+                            eventKmList.add(d);
+                            Log.d(TAG, "  -> Km parcial: " + d + " [" + result.layerUsed + "]");
+                        }
+                    }
+                    for (Double t : result.times) {
+                        if (t > 0 && !eventTimeList.contains(t)) {
+                            eventTimeList.add(t);
+                        }
+                    }
+                    if (result.surgeMultiplier > 1.0 && result.surgeMultiplier > accumSurge) {
+                        accumSurge = result.surgeMultiplier;
+                    }
                 }
+                
+                // Emissão volta pro fluxo normal
+                checkAndEmitIfReady();
             }
-            if (info.surgeMultiplier > 1.0 && info.surgeMultiplier > accumSurge) {
-                accumSurge = info.surgeMultiplier;
-            }
-        }
+        });
     }
 
     private void extractAllText(AccessibilityNodeInfo node, StringBuilder sb) {
@@ -708,15 +730,16 @@ public class GigUReaderService extends AccessibilityService {
         }
     }
 
-    public void triggerOcr() {
+    public void triggerOcr(boolean isForced) {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
             Log.w(TAG, "OCR não suportado (Requer Android 11+)");
             return;
         }
 
         long now = System.currentTimeMillis();
-        if (now - lastOcrTime < OCR_THROTTLE_MS) {
-            Log.d(TAG, "OCR ignorado (throttled)");
+        long throttle = isForced ? OCR_FORCE_MS : OCR_THROTTLE_MS;
+        
+        if (now - lastOcrTime < throttle) {
             return;
         }
         lastOcrTime = now;
