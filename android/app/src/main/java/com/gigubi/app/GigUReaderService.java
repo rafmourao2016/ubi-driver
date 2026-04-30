@@ -41,7 +41,7 @@ public class GigUReaderService extends AccessibilityService {
 
     private static final long ACCUMULATION_WINDOW_MS = 5000;
     private static final long EMIT_THROTTLE_MS = 3000;
-    private static final long IDLE_CLEAR_MS    = 8000;
+    private static final long IDLE_CLEAR_MS    = 60000;
     private static final double MIN_PRICE_THRESHOLD = 5.00; // Piso de R$ 5,00
 
     private static final Pattern PRICE_PATTERN = Pattern.compile(
@@ -82,7 +82,8 @@ public class GigUReaderService extends AccessibilityService {
         // ── 0) Caso especial: Notificações (Heads-up) ──
         if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             if (pkg.contains("app99") || pkg.contains("ubercab")) {
-                Log.d(TAG, "Notificação detectada! Aguardando 800ms para o cartão subir...");
+                Log.d(TAG, "Notificação detectada! Resetando throttle e aguardando 800ms...");
+                lastOcrTime = 0; // RESET: Permite OCR imediato para esta nova oferta
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     triggerOcr();
                 }, 800);
@@ -251,16 +252,16 @@ public class GigUReaderService extends AccessibilityService {
             @Override public void run() {
                 Log.d(TAG, "[IDLE] 8s sem oferta");
                     GigUPlugin plugin = GigUPlugin.getInstance();
-                    if (plugin != null) {
+                    if (plugin != null && accumPrice <= 0) { // SÓ limpa se não houver valor ativo
                         // Em vez de esconder, apenas limpamos para "Aguardando..."
                         OverlayPlugin overlay = OverlayPlugin.getInstance();
                         if (overlay != null) overlay.clearOverlay();
+                        accumPrice = 0;
+                        accumKm = 0;
+                        accumTimeMin = 0;
+                        lastEmitTime = 0;
+                        lastEmittedHash = "";
                     }
-                    accumPrice = 0;
-                    accumKm = 0;
-                    accumTimeMin = 0;
-                    lastEmitTime = 0; // RESET: Permite que a PRÓXIMA corrida seja emitida na hora
-                    lastEmittedHash = "";
  // Reseta o hash para permitir novas ofertas iguais depois de um tempo
             }
         }, IDLE_CLEAR_MS);
@@ -297,9 +298,9 @@ public class GigUReaderService extends AccessibilityService {
         if (cleanText.isEmpty()) {
             Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             
-            // Tenta OCR se a tela parecer travada/vazia
+            // Tenta OCR se a tela parecer travada/vazia (Uber ou 99)
             String pkgStr = pkg != null ? pkg.toString() : "";
-            if (pkgStr.contains("app99") || pkgStr.contains("ubercab")) {
+            if (pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("uber")) {
                 triggerOcr();
             }
             return;
