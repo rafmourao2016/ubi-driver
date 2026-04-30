@@ -240,14 +240,13 @@ public class GigUReaderService extends AccessibilityService {
 
         Log.d(TAG, "Acumulado: R$" + accumPrice + " | " + accumKm + " km");
 
-        if (accumPrice > 0 && accumKm > 0 && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
+        // Se temos preço, já podemos emitir (mesmo sem KM, mostramos o que temos)
+        if (accumPrice >= MIN_PRICE_THRESHOLD && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
             String currentHash = accumPrice + "_" + accumKm + "_" + accumTimeMin + "_" + accumSurge;
             if (!currentHash.equals(lastEmittedHash)) {
                 emitOffer(accumPrice, accumKm, accumTimeMin, accumSurge);
                 lastEmittedHash = currentHash;
                 resetIdleTimer();
-            } else {
-                Log.d(TAG, "  [DEDUPLICADO] Oferta já emitida: " + currentHash);
             }
         }
     }
@@ -305,7 +304,11 @@ public class GigUReaderService extends AccessibilityService {
         if (cleanText.isEmpty()) {
             Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             
-            // OCR automático removido aqui para evitar travamentos por loop infinito
+            // Tenta OCR se a tela parecer travada/vazia
+            String pkgStr = pkg != null ? pkg.toString() : "";
+            if (pkgStr.contains("app99") || pkgStr.contains("ubercab")) {
+                triggerOcr();
+            }
             return;
         }
 
@@ -317,21 +320,13 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
 
-        // ── Guard de Conteúdo ──
+        // ── Guard de Conteúdo Relaxado ──
         String lowerFull = fullText.toLowerCase();
         boolean hasPrice = lowerFull.contains("r$");
-        boolean hasRideKeyword = lowerFull.contains("aceitar") 
-            || lowerFull.contains("selecionar")
-            || lowerFull.contains("viagem")
-            || lowerFull.contains("distância")
-            || lowerFull.contains("pagamento")
-            || lowerFull.contains("km")
-            || lowerFull.contains("min");
-
-        if (!hasPrice || !hasRideKeyword) {
-            // Se NÃO tem preço e é o mapa (Onde vamos?), aí sim limpamos
+        
+        if (!hasPrice) {
+            // Se NÃO tem preço e é o mapa, limpamos
             if (lowerFull.contains("onde vamos") || lowerFull.contains("para onde") || lowerFull.contains("procurar")) {
-                Log.d(TAG, "[MAPA] Detectado retorno ao mapa (sem preço). Limpando overlay.");
                 OverlayPlugin overlay = OverlayPlugin.getInstance();
                 if (overlay != null) overlay.clearOverlay();
                 accumPrice = 0; accumKm = 0; lastEmitTime = 0;
