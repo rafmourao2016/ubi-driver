@@ -37,6 +37,7 @@ import java.util.regex.Pattern;
 
 public class GigUReaderService extends AccessibilityService {
     private static final String TAG = "GigUReader";
+    private static final boolean DEBUG = BuildConfig.DEBUG;
     private static GigUReaderService instance;
 
     public static GigUReaderService getInstance() { return instance; }
@@ -90,7 +91,7 @@ public class GigUReaderService extends AccessibilityService {
         // ── 0) Caso especial: Notificações (Heads-up) ──
         if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             if (pkg.contains("app99") || pkg.contains("ubercab")) {
-                Log.d(TAG, "Notificação detectada! Agendando verificação em 1000ms...");
+                if (DEBUG) Log.d(TAG, "Notificação detectada! Agendando verificação em 1000ms...");
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     triggerOcr(false);
                 }, 1000);
@@ -117,7 +118,7 @@ public class GigUReaderService extends AccessibilityService {
         if (eventIsUber || activeIsUber) currentAppIsUber = true;
         if (eventIs99 || activeIs99)     currentAppIsUber = false;
 
-        Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
+        if (DEBUG) Log.d(TAG, "Evento: " + pkg + " | tipo: " + event.getEventType());
 
         long now = System.currentTimeMillis();
         if (now - firstEventTime > ACCUMULATION_WINDOW_MS) {
@@ -230,11 +231,11 @@ public class GigUReaderService extends AccessibilityService {
                 accumTimeMin = totalTime;
             }
         } else if (!eventKmList.isEmpty()) {
-            Log.d(TAG, "  [AGUARDANDO] " + eventKmList.size() + " km — esperando mais trechos");
+            if (DEBUG) Log.d(TAG, "  [AGUARDANDO] " + eventKmList.size() + " km — esperando mais trechos");
             notifyDiag("[WAIT] Trechos: " + eventKmList.size() + "/" + minKm + " (p=" + accumPrice + ")");
         }
 
-        Log.d(TAG, "Acumulado: R$" + accumPrice + " | " + accumKm + " km");
+        if (DEBUG) Log.d(TAG, "Acumulado: R$" + accumPrice + " | " + accumKm + " km");
 
         // Se temos preço, já podemos emitir (mesmo sem KM, mostramos o que temos)
         if (accumPrice >= MIN_PRICE_THRESHOLD && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
@@ -315,7 +316,7 @@ public class GigUReaderService extends AccessibilityService {
         
         CharSequence pkg = root.getPackageName();
         if (pkg != null) {
-            Log.d(TAG, "processWindowRoot INICIO - pacote: " + pkg.toString() + " | tipo: " + eventType);
+            if (DEBUG) Log.d(TAG, "processWindowRoot INICIO - pacote: " + pkg.toString() + " | tipo: " + eventType);
         }
 
         StringBuilder sb = new StringBuilder();
@@ -335,12 +336,12 @@ public class GigUReaderService extends AccessibilityService {
             boolean isTarget = pkgStr.contains("app99") || pkgStr.contains("ubercab") || pkgStr.contains("uber");
             
             if (isTarget && root.getChildCount() > 0) {
-                Log.d(TAG, "Janela Alvo detectada sem texto acessível. Forçando OCR.");
+                if (DEBUG) Log.d(TAG, "Janela Alvo detectada sem texto acessível. Forçando OCR.");
                 triggerOcr(true);
                 return;
             }
 
-            Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
+            if (DEBUG) Log.d(TAG, "processWindowRoot abortado: [vazio ou apenas overlay] pkg=" + pkg + " children=" + root.getChildCount());
             return;
         }
 

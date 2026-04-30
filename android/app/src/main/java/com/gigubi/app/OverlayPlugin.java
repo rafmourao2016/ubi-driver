@@ -27,6 +27,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class OverlayPlugin extends Plugin {
 
     private static OverlayPlugin instance;
+    private static final boolean DEBUG = BuildConfig.DEBUG;
     private WindowManager windowManager;
     private FrameLayout overlayView;
 
