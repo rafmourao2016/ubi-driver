@@ -64,6 +64,7 @@ public class OverlayPlugin extends Plugin {
         double netProfit   = call.getDouble("netProfit", 0.0);
         double margin      = call.getDouble("margin", 0.0);
         double profitPerKm = call.getDouble("profitPerKm", 0.0);
+        double km          = call.getDouble("km", 0.0);
         dailyGoal        = call.getDouble("dailyGoal", dailyGoal);
         dailyAccumulated = call.getDouble("dailyAccumulated", dailyAccumulated);
 
@@ -77,11 +78,11 @@ public class OverlayPlugin extends Plugin {
                 return;
             }
             if (overlayView != null) {
-                updateView(netProfit, margin, profitPerKm);
+                updateView(netProfit, margin, profitPerKm, km);
                 call.resolve();
                 return;
             }
-            createOverlay(netProfit, margin, profitPerKm);
+            createOverlay(netProfit, margin, profitPerKm, km);
             call.resolve();
         });
     }
@@ -91,11 +92,12 @@ public class OverlayPlugin extends Plugin {
         double netProfit   = call.getDouble("netProfit", 0.0);
         double margin      = call.getDouble("margin", 0.0);
         double profitPerKm = call.getDouble("profitPerKm", 0.0);
+        double km          = call.getDouble("km", 0.0);
         dailyGoal        = call.getDouble("dailyGoal", dailyGoal);
         dailyAccumulated = call.getDouble("dailyAccumulated", dailyAccumulated);
 
         getActivity().runOnUiThread(() -> {
-            updateView(netProfit, margin, profitPerKm);
+            updateView(netProfit, margin, profitPerKm, km);
             call.resolve();
         });
     }
@@ -149,7 +151,7 @@ public class OverlayPlugin extends Plugin {
 
     // ── Overlay Construction ────────────────────────────────────────
 
-    private void createOverlay(double netProfit, double margin, double profitPerKm) {
+    private void createOverlay(double netProfit, double margin, double profitPerKm, double km) {
         windowManager = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
 
         overlayView = new FrameLayout(getContext());
@@ -281,7 +283,7 @@ public class OverlayPlugin extends Plugin {
         overlayView.addView(inner);
 
         // Renderiza valores iniciais
-        updateView(netProfit, margin, profitPerKm);
+        updateView(netProfit, margin, profitPerKm, km);
         updateGoalViews();
 
         // ── WindowManager params ──
