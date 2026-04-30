@@ -640,31 +640,35 @@ public class GigUReaderService extends AccessibilityService {
 
         Log.d(TAG, "Iniciando captura de tela para OCR...");
         
-        Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
-            ? getMainExecutor() 
-            : new Executor() {
-                private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-                @Override public void execute(Runnable r) { handler.post(r); }
-            };
+        try {
+            Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
+                ? getMainExecutor() 
+                : new Executor() {
+                    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+                    @Override public void execute(Runnable r) { handler.post(r); }
+                };
 
-        takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
-            @Override
-            public void onSuccess(ScreenshotResult screenshotResult) {
-                Bitmap bitmap = Bitmap.wrapHardwareBuffer(
-                    screenshotResult.getHardwareBuffer(),
-                    screenshotResult.getColorSpace()
-                );
-                
-                if (bitmap != null) {
-                    processBitmapWithOcr(bitmap);
+            takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
+                @Override
+                public void onSuccess(ScreenshotResult screenshotResult) {
+                    Bitmap bitmap = Bitmap.wrapHardwareBuffer(
+                        screenshotResult.getHardwareBuffer(),
+                        screenshotResult.getColorSpace()
+                    );
+                    
+                    if (bitmap != null) {
+                        processBitmapWithOcr(bitmap);
+                    }
                 }
-            }
 
-            @Override
-            public void onFailure(int errorCode) {
-                Log.e(TAG, "Falha ao capturar screenshot: " + errorCode);
-            }
-        });
+                @Override
+                public void onFailure(int errorCode) {
+                    Log.e(TAG, "Falha ao capturar screenshot: " + errorCode);
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "ERRO CRÍTICO ao tentar screenshot: " + e.getMessage());
+        }
     }
 
     private void processBitmapWithOcr(Bitmap bitmap) {
