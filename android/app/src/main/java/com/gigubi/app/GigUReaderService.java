@@ -588,10 +588,10 @@ public class GigUReaderService extends AccessibilityService {
         
         // 1. Limpeza rigorosa: remove nosso próprio overlay e lixo antes de rodar o regex
         String ocrClean = rawText
-            .replaceAll("(?i)faltam[^\\n]*", "")
-            .replaceAll("(?i)margem[^\\n]*", "")
-            .replaceAll("(?i)UBI[^\\n]*", "")
-            .replaceAll("\\d+,\\d+%%\\s*margem[^\\n]*", "")
+            .replaceAll("(?i)[^\\n]*faltam[^\\n]*", "")
+            .replaceAll("(?i)[^\\n]*margem[^\\n]*", "")
+            .replaceAll("(?i)[^\\n]*UBI[^\\n]*", "")
+            .replaceAll("(?i)[^\\n]*afeta a TA[^\\n]*", "")
             .replaceAll("R\\$0,00", "")
             .replaceAll("R\\$[\\s\u00A0]*\\d+[.,]\\d+\\s*/\\s*km", ""); // remove preço/km
 
@@ -640,9 +640,15 @@ public class GigUReaderService extends AccessibilityService {
         info.timeMin = totalTimeFound;
         
         // Exemplo: 1,1x ou *1,1x (Trava estrita: 1.1 a 4.9)
-        Matcher sm = SURGE_PATTERN.matcher(rawText);
+        Matcher sm = SURGE_PATTERN.matcher(ocrClean);
         while (sm.find()) {
             double s = parseDouble(sm.group(1));
+            
+            // Correção automática de vírgula perdida: 13x -> 1.3x
+            if (s >= 10 && s < 50) {
+                s = s / 10.0;
+            }
+            
             if (s >= 1.1 && s <= 4.9) {
                 info.surgeMultiplier = s;
                 info.surge = s;
