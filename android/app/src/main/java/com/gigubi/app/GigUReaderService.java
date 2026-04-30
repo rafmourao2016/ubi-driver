@@ -82,17 +82,10 @@ public class GigUReaderService extends AccessibilityService {
         // ── 0) Caso especial: Notificações (Heads-up) ──
         if (event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             if (pkg.contains("app99") || pkg.contains("ubercab")) {
-                Log.d(TAG, "Notificação de corrida detectada (" + pkg + ")! Escaneando TODAS as janelas...");
-                List<AccessibilityWindowInfo> windows = getWindows();
-                if (windows != null) {
-                    for (AccessibilityWindowInfo win : windows) {
-                        AccessibilityNodeInfo winRoot = win.getRoot();
-                        if (winRoot != null) {
-                            processWindowRoot(winRoot, event.getEventType());
-                            winRoot.recycle();
-                        }
-                    }
-                }
+                Log.d(TAG, "Notificação detectada! Aguardando 800ms para o cartão subir...");
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    triggerOcr();
+                }, 800);
             }
             return;
         }
@@ -701,7 +694,15 @@ public class GigUReaderService extends AccessibilityService {
         recognizer.process(image)
             .addOnSuccessListener(visionText -> {
                 String resultText = visionText.getText();
-                Log.d(TAG, "OCR RESULT: " + resultText);
+                String lowText = resultText.toLowerCase();
+                
+                // Validação rigorosa: só aceita se tiver km, min e r$ juntos
+                if (!lowText.contains("km") || !lowText.contains("min") || !lowText.contains("r$")) {
+                    Log.d(TAG, "OCR descartado - não parece um cartão de corrida completo.");
+                    return;
+                }
+
+                Log.d(TAG, "OCR RESULT (VALIDADO): " + resultText);
                 GigUPlugin plugin = GigUPlugin.getInstance();
                 if (plugin != null) {
                     plugin.processRawText(resultText, "unknown", "OCR");
