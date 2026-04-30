@@ -82,6 +82,7 @@ public class GigUPlugin extends Plugin {
     /** Verifica se as duas permissões foram concedidas */
     @PluginMethod
     public void checkPermissions(PluginCall call) {
+        Log.d("GigUPlugin", "checkPermissions chamado");
         boolean hasOverlay      = Settings.canDrawOverlays(getContext());
         boolean hasAccessibility = isAccessibilityServiceEnabled();
         boolean hasNotification = isNotificationServiceEnabled();

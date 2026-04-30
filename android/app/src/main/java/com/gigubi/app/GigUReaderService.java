@@ -9,6 +9,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import androidx.core.app.NotificationCompat;
 import android.view.accessibility.AccessibilityWindowInfo;
@@ -706,7 +707,11 @@ public class GigUReaderService extends AccessibilityService {
         Log.i(TAG, "=== GigU Accessibility CONECTADO ===");
         
         createNotificationChannel();
-        startForeground(1001, createNotification());
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1001, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(1001, createNotification());
+        }
     }
 
     private void createNotificationChannel() {
