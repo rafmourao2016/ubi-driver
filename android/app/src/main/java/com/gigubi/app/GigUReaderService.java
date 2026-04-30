@@ -344,8 +344,8 @@ public class GigUReaderService extends AccessibilityService {
 
         // Detecção de "Volta ao Mapa" - Se vir palavras do mapa, limpa o overlay
         String lowClean = cleanText.toLowerCase();
-        if (lowClean.contains("onde vamos") || lowClean.contains("pesquisar") || lowClean.contains("procurar") || lowClean.contains("para onde") || lowClean.contains("buscando")) {
-            Log.d(TAG, "[MAPA] Detectado retorno ao mapa ou status 'Buscando'. Limpando overlay.");
+        if (lowClean.contains("onde vamos") || lowClean.contains("pesquisar") || lowClean.contains("procurar") || lowClean.contains("para onde")) {
+            Log.d(TAG, "[MAPA] Detectado retorno ao mapa. Limpando overlay.");
             OverlayPlugin overlay = OverlayPlugin.getInstance();
             if (overlay != null) overlay.clearOverlay();
             accumPrice = 0; accumKm = 0;
