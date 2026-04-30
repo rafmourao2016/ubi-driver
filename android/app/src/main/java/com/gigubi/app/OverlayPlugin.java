@@ -224,6 +224,49 @@ public class OverlayPlugin extends Plugin {
         statsText.setTextSize(10);
         statsText.setPadding(0, 0, 0, dp(8));
 
+        // ── Botão Confirmar Ganho ──
+        TextView confirmBtn = new TextView(getContext());
+        confirmBtn.setText("＋ CONFIRMAR GANHO");
+        confirmBtn.setTextColor(Color.WHITE);
+        confirmBtn.setTextSize(11);
+        confirmBtn.setTypeface(null, Typeface.BOLD);
+        confirmBtn.setGravity(Gravity.CENTER);
+        confirmBtn.setPadding(0, dp(8), 0, dp(8));
+        
+        GradientDrawable btnBg = new GradientDrawable();
+        btnBg.setCornerRadius(dp(12));
+        btnBg.setColor(Color.parseColor("#7C3AED")); // Roxo vibrante
+        confirmBtn.setBackground(btnBg);
+
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnParams.setMargins(0, dp(4), 0, dp(10));
+        confirmBtn.setLayoutParams(btnParams);
+
+        confirmBtn.setOnClickListener(v -> {
+            if (lastRenderedProfit > 0) {
+                dailyAccumulated += lastRenderedProfit;
+                updateGoalViews();
+                
+                // Feedback visual rápido
+                confirmBtn.setText("✅ SOMADO!");
+                confirmBtn.setBackgroundColor(Color.parseColor("#059669")); // Verde
+                
+                // Notifica o frontend para persistir no Supabase
+                JSObject data = new JSObject();
+                data.put("amount", lastRenderedProfit);
+                data.put("newTotal", dailyAccumulated);
+                notifyListeners("onProfitConfirmed", data);
+
+                v.postDelayed(() -> {
+                    if (confirmBtn != null) {
+                        confirmBtn.setText("＋ CONFIRMAR GANHO");
+                        confirmBtn.setBackground(btnBg);
+                    }
+                }, 2000);
+            }
+        });
+
         // ── Separador ──
         View divider = new View(getContext());
         divider.setBackgroundColor(Color.parseColor("#1F2937"));
@@ -278,6 +321,7 @@ public class OverlayPlugin extends Plugin {
         inner.addView(topRow);
         inner.addView(profitText);
         inner.addView(statsText);
+        inner.addView(confirmBtn); // Adicionado aqui
         inner.addView(divider);
         inner.addView(goalRow);
         inner.addView(goalBarContainer);
