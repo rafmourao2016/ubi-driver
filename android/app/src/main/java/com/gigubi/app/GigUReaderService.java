@@ -734,18 +734,20 @@ public class GigUReaderService extends AccessibilityService {
             overlay.setOverlayVisibility(false);
         }
 
-        try {
-            Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
-                ? getMainExecutor() 
-                : r -> new android.os.Handler(android.os.Looper.getMainLooper()).post(r);
+        // Delay de 100ms para garantir que o Android processou o "hide" na tela
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            try {
+                Executor executor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P 
+                    ? getMainExecutor() 
+                    : r -> new android.os.Handler(android.os.Looper.getMainLooper()).post(r);
 
-            takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
-                @Override
-                public void onSuccess(ScreenshotResult screenshotResult) {
-                    // Volta o overlay imediatamente após o print
-                    if (overlay != null) {
-                        overlay.setOverlayVisibility(true);
-                    }
+                takeScreenshot(Display.DEFAULT_DISPLAY, executor, new TakeScreenshotCallback() {
+                    @Override
+                    public void onSuccess(ScreenshotResult screenshotResult) {
+                        // Volta o overlay imediatamente após o print
+                        if (overlay != null) {
+                            overlay.setOverlayVisibility(true);
+                        }
 
                     Bitmap bitmap = Bitmap.wrapHardwareBuffer(
                         screenshotResult.getHardwareBuffer(),
@@ -770,11 +772,12 @@ public class GigUReaderService extends AccessibilityService {
                 }
             });
 
-        } catch (Exception e) {
-            // Garante volta do overlay em erro crítico
-            if (overlay != null) overlay.setOverlayVisibility(true);
-            Log.e(TAG, "ERRO CRÍTICO ao tentar screenshot: " + e.getMessage());
-        }
+            } catch (Exception e) {
+                // Garante volta do overlay em erro crítico
+                if (overlay != null) overlay.setOverlayVisibility(true);
+                Log.e(TAG, "ERRO CRÍTICO ao tentar screenshot: " + e.getMessage());
+            }
+        }, 100);
     }
 
     private void processBitmapWithOcr(Bitmap bitmap) {
