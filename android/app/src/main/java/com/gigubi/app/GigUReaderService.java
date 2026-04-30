@@ -40,7 +40,7 @@ public class GigUReaderService extends AccessibilityService {
     public static GigUReaderService getInstance() { return instance; }
 
     private static final long ACCUMULATION_WINDOW_MS = 5000;
-    private static final long EMIT_THROTTLE_MS = 8000;
+    private static final long EMIT_THROTTLE_MS = 3000;
     private static final long IDLE_CLEAR_MS    = 8000;
     private static final double MIN_PRICE_THRESHOLD = 5.00; // Piso de R$ 5,00
 
@@ -360,8 +360,10 @@ public class GigUReaderService extends AccessibilityService {
             .replaceAll("(?i)Posto.*", "")
             .replaceAll("(?i)Combustív.*", "");
 
-        // 2. Exigência de contexto de corrida: só aceita se tiver km ou min ou Aceitar/Selecionar
-        if (!lowClean.contains("km") && !lowClean.contains("min") && !lowClean.contains("aceitar") && !lowClean.contains("selecionar")) {
+        // 2. Exigência de contexto de corrida: mais palavras-chave para garantir que não perca nada
+        if (!lowClean.contains("km") && !lowClean.contains("min") && !lowClean.contains("aceitar") && 
+            !lowClean.contains("selecionar") && !lowClean.contains("viagem") && !lowClean.contains("distância") &&
+            !lowClean.contains("embarque")) {
             return; 
         }
 
