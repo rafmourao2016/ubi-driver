@@ -213,9 +213,8 @@ public class GigUReaderService extends AccessibilityService {
 
 
         // Regra anti-falso-positivo:
-        // Uber: 1+ km (oferta pode ter só 1 trecho visível)
-        // 99:   2+ km (evita "99 Abastece" que tem 0-1 km)
-        int minKm = currentAppIsUber ? 1 : 2;
+        // Uber e 99: 1+ km é suficiente para ser uma oferta válida.
+        int minKm = 1;
 
         if (eventKmList.size() >= minKm) {
             double totalKm = 0;
