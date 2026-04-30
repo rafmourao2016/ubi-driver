@@ -66,6 +66,7 @@ public class GigUReaderService extends AccessibilityService {
 
     // Rastreia pacotes já logados para não poluir o log (1 entrada por pacote por 5s)
     private final java.util.Map<String, Long> loggedPkgs = new java.util.HashMap<>();
+    private String lastCapturedText = "";
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -291,6 +292,7 @@ public class GigUReaderService extends AccessibilityService {
         StringBuilder sb = new StringBuilder();
         extractAllText(root, sb);
         String fullText = sb.toString().trim();
+        this.lastCapturedText = fullText;
         
         if (fullText.isEmpty()) {
             Log.d(TAG, "processWindowRoot abortado: [vazio] pkg=" + pkg + " class=" + root.getClassName() + " children=" + root.getChildCount());
@@ -639,7 +641,7 @@ public class GigUReaderService extends AccessibilityService {
         }
 
         // Evita disparar OCR na tela de "Várias solicitações recusadas"
-        if (lastFullText.contains("solicita") && lastFullText.contains("recusadas")) {
+        if (lastCapturedText.contains("solicita") && lastCapturedText.contains("recusadas")) {
             Log.d(TAG, "Tela de aviso detectada. Ignorando OCR.");
             return;
         }
