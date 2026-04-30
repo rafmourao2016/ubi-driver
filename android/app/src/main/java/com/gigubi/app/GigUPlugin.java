@@ -155,61 +155,10 @@ public class GigUPlugin extends Plugin {
     public void processRawText(String rawText, String pkg, String source) {
         if (rawText == null || rawText.isEmpty()) return;
 
-        // VACINA: Ignora se o texto parece vir do nosso próprio overlay
-        // Isso evita "eco" e cálculos errados baseados no que nós mesmos escrevemos na tela
-        if (rawText.contains("UBI") || rawText.contains("margem") || rawText.contains("Faltam")) {
-            Log.d("GigUPlugin", "[FILTRO] Texto do overlay ignorado para evitar eco.");
-            return;
-        }
-
-        double price = 0;
-        double km = 0;
-        double time = 0;
-
-        Matcher pm = PRICE_PATTERN.matcher(rawText);
-        if (pm.find()) price = parseDouble(pm.group(1));
-
-        Matcher dm = DISTANCE_PATTERN.matcher(rawText);
-        // Pre-carrega o primeiro km para o sanity check se existir
-        double firstKm = 0;
-        if (dm.find()) {
-            double d = parseDouble(dm.group(1));
-            String unit = dm.group(2).toLowerCase();
-            firstKm = unit.equals("m") ? d / 1000.0 : d;
-            dm.reset(); // Reseta para o loop while não perder o primeiro valor
-        }
-
-        // SANITY CHECK: Se o preço for > 200 e o primeiro km for muito baixo/zero, ignoramos
-        if (price > 200 && firstKm <= 0.1) {
-            Log.d("GigUPlugin", "[SANITY] Preço suspeito ignorado: R$" + price + " com " + firstKm + "km");
-            return;
-        }
-
-        while (dm.find()) {
-            double d = parseDouble(dm.group(1));
-            String unit = dm.group(2).toLowerCase();
-            if (unit.equals("m")) d = d / 1000.0;
-            if (d > km) km = d;
-        }
-
-        Matcher tm = TIME_PATTERN.matcher(rawText);
-        if (tm.find()) time = parseDouble(tm.group(1));
-
-        Log.d("GigUPlugin", "[" + source + "] Extraído: R$" + price + " | " + km + "km | " + time + "min");
-
-        // 3. Preço mínimo de R$ 5,00 (ignora posto de gasolina R$4,06 etc)
-        if (price >= 5.00 && km > 0) {
-            emitOfferReceived(rawText, price, km, time, 1.0);
-        } else {
-            // Se falhou e veio da Notificação, pode sinalizar para tentar OCR
-            if (source.equals("Notification")) {
-                Log.d("GigUPlugin", "Notificação incompleta. OCR pode ser necessário.");
-                // Aqui poderíamos disparar o OCR no ReaderService via um broadcast ou singleton
-                GigUReaderService reader = GigUReaderService.getInstance();
-                if (reader != null) {
-                    reader.triggerOcr();
-                }
-            }
+        // Se o texto vem do OCR, mandamos para o ReaderService processar com as regras de acúmulo
+        GigUReaderService reader = GigUReaderService.getInstance();
+        if (reader != null) {
+            reader.processRawTextOcr(rawText);
         }
     }
 

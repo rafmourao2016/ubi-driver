@@ -47,6 +47,8 @@ public class GigUReaderService extends AccessibilityService {
     private static final Pattern PRICE_PATTERN = Pattern.compile(
         "R\\$[\\s\u00A0]*(\\d+(?:[.,]\\d+)?)"
     );
+    private static final Pattern SURGE_PATTERN = Pattern.compile(
+        "(?:[^\\d]|^)([1-5][.,]\\d)x", Pattern.CASE_INSENSITIVE);
     private static final Pattern DISTANCE_PATTERN = Pattern.compile(
         "(\\d+(?:[.,]\\d+)?)[\\s\u00A0]*(km|m)\\b",
         Pattern.CASE_INSENSITIVE
@@ -267,6 +269,35 @@ public class GigUReaderService extends AccessibilityService {
         }, IDLE_CLEAR_MS);
     }
 
+    public void processRawTextOcr(String text) {
+        RideInfo info = new RideInfo();
+        if (extractByRegex(text, info)) {
+            Log.d(TAG, "OCR processado - preço: " + info.price + " | km: " + info.km);
+            if (info.hasPrice && info.price > accumPrice) {
+                accumPrice = info.price;
+                accumKm    = info.km;
+                accumTimeMin = info.timeMin;
+                accumSurge = info.surge;
+                lastEmitTime = 0; // Força emissão imediata
+                checkAndEmitIfReady();
+            }
+        } else {
+            Log.d(TAG, "Falha ao extrair dados do texto OCR via Regex.");
+        }
+    }
+
+    private void checkAndEmitIfReady() {
+        long now = System.currentTimeMillis();
+        if (accumPrice >= MIN_PRICE_THRESHOLD && (now - lastEmitTime) > EMIT_THROTTLE_MS) {
+            String currentHash = accumPrice + "_" + accumKm + "_" + accumTimeMin + "_" + accumSurge;
+            if (!currentHash.equals(lastEmittedHash)) {
+                emitOffer(accumPrice, accumKm, accumTimeMin, accumSurge);
+                lastEmittedHash = currentHash;
+                resetIdleTimer();
+            }
+        }
+    }
+
     public static class RideInfo {
         public double price = 0.0;
         public List<Double> distances = new ArrayList<>();
@@ -274,6 +305,9 @@ public class GigUReaderService extends AccessibilityService {
         public double surgeMultiplier = 1.0;
         public String layerUsed = "";
         public boolean hasPrice = false;
+        public double km = 0.0;
+        public double timeMin = 0.0;
+        public double surge = 1.0;
     }
 
     private void processWindowRoot(AccessibilityNodeInfo root, int eventType) {
@@ -587,12 +621,13 @@ public class GigUReaderService extends AccessibilityService {
             }
         }
         
-        // Exemplo: 1,1x
-        Matcher sm = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*[xX]").matcher(rawText);
+        // Exemplo: 1,1x ou *1,1x
+        Matcher sm = SURGE_PATTERN.matcher(rawText);
         while (sm.find()) {
             double s = parseDouble(sm.group(1));
             if (s > 1.0 && s <= 5.0) {
                 info.surgeMultiplier = s;
+                info.surge = s;
                 found = true;
             }
         }
