@@ -7,4 +7,5 @@
     android:canRequestFilterKeyEvents="true"
     android:canTakeScreenshot="true"
     android:notificationTimeout="100"
+    android:packageNames="com.ubercab.driver,com.ubercab,com.taxis99,com.app99.driver,com.noventaenove.driver"
     android:description="@string/accessibility_service_description" />

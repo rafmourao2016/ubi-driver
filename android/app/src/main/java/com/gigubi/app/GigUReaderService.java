@@ -113,7 +113,19 @@ public class GigUReaderService extends AccessibilityService {
         boolean activeIsUber = activePkg.contains("ubercab");
         boolean activeIs99   = activePkg.contains("app99") || activePkg.contains("taxis") || activePkg.contains("noventaenove");
 
-        if (!eventIsUber && !eventIs99 && !activeIsUber && !activeIs99) return;
+        // --- PROTEÇÃO PARA BANCOS E PRIVACIDADE ---
+        // Se não estamos em um app de transporte, escondemos o overlay imediatamente.
+        if (!eventIsUber && !eventIs99 && !activeIsUber && !activeIs99) {
+            OverlayPlugin overlay = OverlayPlugin.getInstance();
+            if (overlay != null) overlay.setOverlayVisibility(false);
+            return;
+        }
+
+        // Se voltamos para um app alvo, garantimos que o overlay esteja visível (se houver oferta)
+        if (accumPrice >= MIN_PRICE_THRESHOLD) {
+            OverlayPlugin overlay = OverlayPlugin.getInstance();
+            if (overlay != null) overlay.setOverlayVisibility(true);
+        }
 
         if (eventIsUber || activeIsUber) currentAppIsUber = true;
         if (eventIs99 || activeIs99)     currentAppIsUber = false;
